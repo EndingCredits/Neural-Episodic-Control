@@ -2,10 +2,13 @@
 import numpy as np
 from sklearn.neighbors import BallTree, KDTree
 
+# Base class
 class LRU_KNN:
     def __init__(self, capacity, key_dimension, delta=0.001, alpha=0.1):
         self.capacity = capacity
         self.curr_capacity = 0
+        self.delta = delta
+        self.alpha = alpha
 
         self.embeddings = np.zeros((capacity, key_dimension))
         self.values = np.zeros(capacity)
@@ -13,16 +16,14 @@ class LRU_KNN:
         self.lru = np.zeros(capacity)
         self.tm = 0.0
 
-        self.tree = None
-
-        self.delta = delta
-        self.alpha = alpha
-
 
     # Returns the distances and indexes of the closest embeddings
     def _nn(self, keys, k):
-        dist, ind = self.tree.query(keys, k=k)
-        return dist, ind
+        pass
+
+    # Inserts emebddings and values at the given indices
+    def _insert(self, keys, values, indices):
+        pass
 
     # Returns the stored embeddings and values of the closest embeddings
     def query(self, keys, k):
@@ -30,7 +31,6 @@ class LRU_KNN:
         
         embs = [] ; values = []
         for ind in indices:
-          #for i in ind:
           self.lru[ind] = self.tm
           
           embs.append(self.embeddings[ind])
@@ -53,6 +53,7 @@ class LRU_KNN:
                     self.values[index] = self.values[index]*(1-self.alpha) + new_value*self.alpha
                     skip_indices.append(i)
 
+        indices, keys_, values_ = [], [], []
         for i, _ in enumerate(keys):
             if i in skip_indices: continue
             if self.curr_capacity >= self.capacity:
@@ -61,12 +62,31 @@ class LRU_KNN:
             else:
                 index = self.curr_capacity
                 self.curr_capacity+=1
-
-            self.embeddings[index] = keys[i]
-            self.values[index] = values[i]
             self.lru[index] = self.tm
+            indices.append(index) ; keys_.append(keys[i]) ; values_.append(values[i])
+
+        self._insert(keys_, values_, indices)
         self.tm += 0.01
+
+
+
+# Simple KD-tree dict
+class kdtree_dict(LRU_KNN):
+    def __init__(self, capacity, key_dimension, delta=0.001, alpha=0.1):
+        LRU_KNN.__init__(self, capacity, key_dimension, delta, alpha)
+        self.tree = None
+
+    def _nn(self, keys, k):
+        dist, ind = self.tree.query(keys, k=k)
+        return dist, ind
+
+    def _insert(self, keys, values, indices):
+        for i, ind in enumerate(indices):
+            #print "num: " + str(i) + ", index: " + str(ind)
+            self.embeddings[ind] = keys[i]
+            self.values[ind] = values[i]
         self.tree = KDTree(self.embeddings[:self.curr_capacity])
+
 
 
 class q_dictionary:
@@ -77,7 +97,7 @@ class q_dictionary:
         self.dicts = []
 
         for a in xrange(num_actions):
-            new_dict = LRU_KNN(capacity, key_dimension, self.delta, self.alpha)
+            new_dict = kdtree_dict(capacity, key_dimension, self.delta, self.alpha)
             self.dicts.append(new_dict)
 
     def _query(self, embeddings, actions, knn):
