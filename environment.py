@@ -50,17 +50,12 @@ class ALEEnvironment:
         lives = self.ale.lives()
         for i in range(self.frame_skip):
           reward += self.ale.act(self.actions[action])
-          self._add_screen(self._get_screen())
+        self._add_screen(self._get_screen())
 
         state = self.get_screens()
         self.life_lost = (not (lives == self.ale.lives()))
         terminal = self.ale.game_over() or self.life_lost
         info = []
-
-        #_, w, h = state.shape
-        #ret = np.empty((w, h, 3), dtype=np.uint8)
-        #ret[:, :, 0] = state[1, :, :] ; ret[:, :, 1] = state[2, :, :] ; ret[:, :, 2] = state[3, :, :]
-        #self.viewer.imshow(ret) 
 
         return state, reward, terminal, info
 
