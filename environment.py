@@ -44,7 +44,6 @@ class ALEEnvironment:
             self.step(0)
         
         state = self.get_screens()
-        print "State len " + str(len(state))
         return state
 
     def step(self, action):
