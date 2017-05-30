@@ -4,12 +4,12 @@ This is my attempt at replicating DeepMind's [Neural Episodic Control](https://a
 
 To run the code (after installing all dependencies:
 ```bash
-python NEC.py --rom [path/to/rom/file.bin]
+python main.py --rom [path/to/rom/file.bin]
 ```
 
 Further options can be found using:
 ```bash
-python NEC.py -h
+python main.py -h
 ```
 
 There is currently only training, without any testing and saving or loading. Scores are reported per episode, which is once per life.
