@@ -21,7 +21,7 @@ N.B: There are a number of differences between this implementation and the origi
 * Various hyperparams may be slightly different.
 
 
-Many thanks to all the authors whose code I've shamelessly ripped off, e.g. the DND code and the environment wrapper (even though now they are probably unrecognisable). If you have a separate working implementation of NEC, I'd love to swap notes to see if I've made any errors or there are any good efficiency savings. Also, if you spot any (inevitable) bugs, please let me know.
+Many thanks to all the authors whose code I've shamelessly ripped off, e.g. the knn-dictionary code and the environment wrapper (even though now they are probably unrecognisable). If you have a separate working implementation of NEC, I'd love to swap notes to see if I've made any errors or there are any good efficiency savings. Also, if you spot any (inevitable) bugs, please let me know.
 
 
 ## Dependencies
