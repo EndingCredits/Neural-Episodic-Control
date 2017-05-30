@@ -1,3 +1,4 @@
+import collections
 import cv2
 import numpy as np
 
@@ -19,6 +20,8 @@ class ALEEnvironment:
         self.history_len = 4
         self.history_counter = 0
 
+        self.initial_skip_actions = 4
+
         self.screen_width = 84
         self.screen_height = 84
         self.screens = np.zeros((self.history_len, self.screen_width, self.screen_height))
@@ -29,9 +32,6 @@ class ALEEnvironment:
         self.actions = self.ale.getMinimalActionSet()
         self.life_lost = False
 
-        #from gym.envs.classic_control import rendering
-        #self.viewer = rendering.SimpleImageViewer()
-
     def reset(self, train=True):
         if ( not train or
             not self.life_lost or
@@ -40,23 +40,27 @@ class ALEEnvironment:
             self.life_lost = False
         
         self.last_screen = np.zeros((self.screen_width, self.screen_height))
-        for i in range(self.history_len):
+        for i in range(self.initial_skip_actions):
             self.step(0)
-            
-        return self.get_screens()
+        
+        state = self.get_screens()
+        print "State len " + str(len(state))
+        return state
 
     def step(self, action):
         reward = 0
         lives = self.ale.lives()
         for i in range(self.frame_skip):
           reward += self.ale.act(self.actions[action])
-        self._add_screen(self._get_screen())
+        screen = self._get_screen()
+        self._add_screen(screen)
 
         state = self.get_screens()
         self.life_lost = (not (lives == self.ale.lives()))
         terminal = self.ale.game_over() or self.life_lost
         info = []
 
+        #print "State len " + str(len(state))
         return state, reward, terminal, info
 
     def numActions(self):
@@ -69,14 +73,20 @@ class ALEEnvironment:
 
     def _get_screen(self):
         screen = self.ale.getScreenGrayscale()
-        resized = cv2.resize(screen, (self.screen_width, self.screen_height))
+        resized = np.array(cv2.resize(screen, (self.screen_width, self.screen_height)))
         return resized
 
     def get_screens(self):
-        if self.history_counter == 0:
-            return self.screens
-        else:
-            return self.screens[self.history_counter:] + self.screens[:self.history_counter]
+        return self.screens[permutation(self.history_counter, self.history_len)]
+
+def permutation(shift, num_elems):
+    r = range(num_elems)
+    if shift == 0:
+      return r
+    else:
+      p = r[shift:] + r[:shift]
+      return p
+
 
 
 
