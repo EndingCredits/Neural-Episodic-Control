@@ -4,7 +4,6 @@ import numpy as np
 import tensorflow as tf
 
 import knn_dictionary
-from ops import linear, conv2d, flatten
 
 class NECAgent():
     def __init__(self, session, args):
@@ -21,6 +20,7 @@ class NECAgent():
 
         self.DND_size = args.memory_size
         self.delta = args.delta
+        self.dict_delta = 0.0001
         self.alpha = args.alpha
         self.number_nn = args.num_neighbours
 
@@ -35,28 +35,49 @@ class NECAgent():
         self.session = session
 
 
+        # Replay Memory
         self.memory = ReplayMemory(self.memory_size)
 
+        # History
+        self.history = observation_history(4, [84, 84])
+
         # Tensorflow variables:
+        self.model = 'CNN'
 
         # Model for Embeddings
-        self.state = tf.placeholder("float", [None, 4, 84, 84])
-        with tf.variable_scope('embedding'):
-            self.state_embeddings, self.weights = self.CNN(self.state)
+        if self.model == 'CNN':
+            from networks import deepmind_CNN
+            self.state = tf.placeholder("float", [None, 4, 84, 84])
+            self.state_embeddings, self.weights = deepmind_CNN(self.state)
+        elif self.model == 'nn':
+            from networks import feedforward_network
+            self.state = tf.placeholder("float", [None, self.n_input])
+            self.state_embeddings, self.weights = feedforward_network(self.state)
+        elif self.model == 'object':
+            from networks import embedding_network
+            self.state = tf.placeholder("float", [None, None, self.n_input])
+            # mask to enable masking out of entries, last dim is kept for easy broadcasting
+            self.masks = tf.Variable(tf.ones("float", [None, None, 1]))
+            self.state_embeddings, self.weights = embedding_network(self.state, self.masks)
 
         # DNDs
-        self.DND = knn_dictionary.q_dictionary(self.DND_size, self.state_embeddings.get_shape()[-1], self.n_actions, self.delta, self.alpha)
+        self.DND = knn_dictionary.q_dictionary(
+          self.DND_size, self.state_embeddings.get_shape()[-1], self.n_actions,
+          self.dict_delta, self.alpha)
 
         self.action = tf.placeholder(tf.int8, [None])
 
         # Retrieve info from DND dictionary
-        embs_and_values = tf.py_func(self.DND._query, [self.state_embeddings, self.action, self.number_nn], [tf.float64, tf.float64])
+        embs_and_values = tf.py_func(self.DND._query,
+          [self.state_embeddings, self.action, self.number_nn], [tf.float64, tf.float64])
         self.dnd_embeddings = tf.to_float(embs_and_values[0])
         self.dnd_values = tf.to_float(embs_and_values[1]) 
 
         # DND calculation
-        weightings = 1.0 / (tf.reduce_sum(tf.square(self.dnd_embeddings - tf.expand_dims(self.state_embeddings,1)), axis=2) + [self.delta]) 
-        normalised_weightings = weightings / tf.reduce_sum(weightings, axis=1, keep_dims=True) #keep dims for broadcasting
+        # (takes advantage of broadcasting)
+        distances = tf.square(self.dnd_embeddings - tf.expand_dims(self.state_embeddings, 1))
+        weightings = 1.0 / (tf.reduce_sum(distances, axis=2) + [self.delta]) 
+        normalised_weightings = weightings / tf.reduce_sum(weightings, axis=1, keep_dims=True)
         self.pred_q = tf.reduce_sum(self.dnd_values * normalised_weightings, axis=1)
         
         # Loss Function
@@ -64,8 +85,10 @@ class NECAgent():
         self.td_err = self.target_q - self.pred_q
         total_loss = tf.reduce_sum(tf.square(self.td_err))
         
-        # These are the optimiser settings used by DeepMind
-        self.optim = tf.train.RMSPropOptimizer(self.learning_rate, decay=0.9, epsilon=0.01).minimize(total_loss)
+        # Optimiser
+        self.optim = tf.train.RMSPropOptimizer(
+          self.learning_rate, decay=0.9, epsilon=0.01).minimize(total_loss)
+          # These are the optimiser settings used by DeepMind
 
 
     def _get_state_embeddings(self, states):
@@ -96,13 +119,22 @@ class NECAgent():
         if not self.DND.queryable(self.number_nn):
             return False
 
-        self.session.run(self.optim, feed_dict={self.state: states, self.target_q: Q_targets, self.action: actions})
+        feed_dict = {
+          self.state: states,
+          self.target_q: Q_targets,
+          self.action: actions
+        }
+
+        self.session.run(self.optim, feed_dict=feed_dict)
         
         return True
 
 
-    def Reset(self, state, train=True):
+    def Reset(self, obs, train=True):
         self.training = train
+
+        self.history.add_obs(obs)
+        state = self.history.get_history()
 
         #TODO: turn these lists into a proper trajectory object
         self.trajectory_states = [state]
@@ -133,7 +165,9 @@ class NECAgent():
         return action, value
 
 
-    def Update(self, action, reward, state, terminal=False):
+    def Update(self, action, reward, obs, terminal=False):
+        self.history.add_obs(obs)
+        state = self.history.get_history()
 
         self.trajectory_actions.append(action)
         self.trajectory_rewards.append(reward)
@@ -177,32 +211,40 @@ class NECAgent():
         return True
 
 
-    def CNN(self, state):
-        w = {}
-        initializer = tf.truncated_normal_initializer(0, 0.02)
-        activation_fn = tf.nn.relu
-
-        state = tf.transpose(state, perm=[0, 2, 3, 1])
-
-        l1, w['l1_w'], w['l1_b'] = conv2d(state,
-          32, [8, 8], [4, 4], initializer, activation_fn, 'NHWC', name='l1')
-        l2, w['l2_w'], w['l2_b'] = conv2d(l1,
-          64, [4, 4], [2, 2], initializer, activation_fn, 'NHWC', name='l2')
-        l3, w['l3_w'], w['l3_b'] = conv2d(l1, 
-          64, [3, 3], [1, 1], initializer, activation_fn, 'NHWC', name='l3')
-        
-        shape = l3.get_shape().as_list()
-        l3_flat = tf.reshape(l3, [-1, reduce(lambda x, y: x * y, shape[1:])])
-
-        embedding, w['l4_w'], w['l4_b'] = linear(l3_flat, 128, activation_fn=activation_fn, name='value_hid')
-
-        # Returns the network output, parameters
-        return embedding, [ v for v in w.values() ]
-
-
     def get_seed(self):
         self.curr_seed += 1
         return self.curr_seed
+
+
+# History
+# This should probably be replaced with a trajectory class to unify history and trajectory
+class observation_history:
+    def __init__(self, history_len, obs_size):
+        self.history_len = history_len
+        self.obs_size = obs_size
+
+        self.observations = np.zeros([self.history_len]+obs_size)
+        self.history_counter = 0
+
+    def clear(self, train=True):
+        self.observations.fill(0.0)
+        self.history_counter = 0
+
+    def add_obs(self, obs):
+        self.observations[self.history_counter] = obs
+        self.history_counter = (self.history_counter + 1) % self.history_len
+
+    def get_history(self):
+        ordered_screens = self.observations[permutation(self.history_counter, self.history_len)]
+        return ordered_screens
+
+def permutation(shift, num_elems):
+    r = range(num_elems)
+    if shift == 0:
+      return r
+    else:
+      p = r[shift:] + r[:shift]
+      return p
 
 
 # Adapted from github.com/devsisters/DQN-tensorflow/

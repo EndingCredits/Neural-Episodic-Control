@@ -13,6 +13,7 @@ class LRU_KNN:
         self.embeddings = np.zeros((capacity, key_dimension))
         self.values = np.zeros(capacity)
 
+        #(Least returned unit counter could probably be wrapped into its own class)
         self.lru = np.zeros(capacity)
         self.tm = 0.0
 
@@ -72,36 +73,15 @@ class LRU_KNN:
         self.tm += 0.01
 
 
-
-# Simple KD-tree dict
-class kdtree_dict(LRU_KNN):
-    def __init__(self, capacity, key_dimension, delta=0.001, alpha=0.1):
-        LRU_KNN.__init__(self, capacity, key_dimension, delta, alpha)
-        self.tree = None
-        self.built_capacity = 0
-
-    def _nn(self, keys, k):
-        dists, inds = self.tree.query(keys, k=k)
-        return dists, inds
-
-    def _insert(self, keys, values, indices):
-        for i, ind in enumerate(indices):
-            #print "num: " + str(i) + ", index: " + str(ind)
-            self.embeddings[ind] = keys[i]
-            self.values[ind] = values[i]
-        self.tree = KDTree(self.embeddings[:self.curr_capacity])
-        self.built_capacity = self.curr_capacity
-
-    def queryable(self, k):
-        return (LRU_KNN.queryable(self, k) and (self.built_capacity > k))
-
-
+# Dict using ANNOY library for approximate KNN. Rebuilds the tree every n units added
+# Could probably be a bit more efficient
 class annoy_dict(LRU_KNN):
     def __init__(self, capacity, key_dimension, delta=0.001, alpha=0.1, batch_size=1000):
         LRU_KNN.__init__(self, capacity, key_dimension, delta, alpha)
 
         from annoy import AnnoyIndex
         self.index = AnnoyIndex(key_dimension, metric='euclidean')
+        self.index.set_seed(123)
 
         self.min_update_size = batch_size
         self.cached_keys = []
@@ -145,6 +125,28 @@ class annoy_dict(LRU_KNN):
         return (LRU_KNN.queryable(self, k) and (self.built_capacity > k))
 
 
+# Simple KD-tree dict
+class kdtree_dict(LRU_KNN):
+    def __init__(self, capacity, key_dimension, delta=0.001, alpha=0.1):
+        LRU_KNN.__init__(self, capacity, key_dimension, delta, alpha)
+        self.tree = None
+        self.built_capacity = 0
+
+    def _nn(self, keys, k):
+        dists, inds = self.tree.query(keys, k=k)
+        return dists, inds
+
+    def _insert(self, keys, values, indices):
+        for i, ind in enumerate(indices):
+            #print "num: " + str(i) + ", index: " + str(ind)
+            self.embeddings[ind] = keys[i]
+            self.values[ind] = values[i]
+        self.tree = KDTree(self.embeddings[:self.curr_capacity])
+        self.built_capacity = self.curr_capacity
+
+    def queryable(self, k):
+        return (LRU_KNN.queryable(self, k) and (self.built_capacity > k))
+
 
 class q_dictionary:
     def __init__(self, capacity, key_dimension, num_actions, delta=0.001, alpha=0.1):
@@ -158,16 +160,19 @@ class q_dictionary:
             self.dicts.append(new_dict)
 
     def _query(self, embeddings, actions, knn):
-        # Return the embeddings and values of nearest neighbours from the DNDs for the given embeddings and actions
+        # Return the embeddings and values of nearest neighbours from the
+        #   DNDs for the given embeddings and actions
         dnd_embeddings = [] ; dnd_values = []
         for i, a in enumerate(actions):
             e, v = self.dicts[a].query([embeddings[i]], knn)
             dnd_embeddings.append(e[0]) ; dnd_values.append(v[0])
+        # Return format is batch# x embedding
         return dnd_embeddings, dnd_values
 
 
     def query(self, embeddings, knn):
-        # Return the embeddings and values of nearest neighbours from the DNDs of each action forthe given embeddings
+        # Return the embeddings and values of nearest neighbours from the
+        #   DNDs of each action forthe given embeddings
         dnd_embeddings = [] ; dnd_values = []
         for i, a in enumerate(actions):
             e, v = self.dicts[a].query(embeddings[i], knn)

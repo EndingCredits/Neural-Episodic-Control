@@ -51,3 +51,43 @@ def flatten(input_):
       in_list = [flatten(elem) for elem in in_list ]
     
     return tf.concat(0, [ tf.reshape(elem, [-1]) for elem in in_list])
+
+
+
+# Permutation invariant layer
+def invariant_layer(inputs, out_size, context=None, activation_fct='ReLU', name=''):
+
+    in_size = inputs.get_shape().as_list()[-1]
+    if context is not None:
+      context_size = context.get_shape().as_list()[-1]
+
+    with tf.variable_scope(name) as vs:
+      w_e = tf.Variable(tf.random_normal((in_size,out_size), stddev=0.1), name='w_e')
+      if context is not None:
+        w_c = tf.Variable(tf.random_normal((context_size,out_size), stddev=0.1), name='w_c')
+      b = tf.Variable(tf.zeros(out_size), name='b')
+
+    if context is not None:
+       context_part = tf.expand_dims(tf.matmul(context, w_c), 1)
+    else:
+       context_part = 0
+    
+    element_part = tf.nn.conv1d(inputs, [w_e], stride=1, padding="SAME")
+
+    elements = tf.nn.relu(element_part + context_part + b)
+
+    # Returns elements, their invariant and  the weights
+    return elements, tf.get_collection(tf.GraphKeys.VARIABLES, scope=vs.name)
+
+
+def mask_and_pool(embeds, mask, pool_type='max'):
+    # Use broadcasting to multiply
+    masked_embeds = tf.multiply(embeds, mask)
+
+    # Pool using max pooling
+    embed = tf.reduce_max(masked_embeds, 1)
+
+    # For mean pooling:
+    #embed = tf.reduce_sum(masked_embeds, 1) / tf.reduce_sum(mask, 1)
+
+    return embed

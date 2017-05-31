@@ -22,9 +22,16 @@ def main(_):
     training_iters = args.training_iters
     display_step = args.display_step
     
-    env = ALEEnvironment(args.rom)
-    args.input_size = 8
-    args.num_actions = env.numActions()
+
+    if args.env_type == 'ALE':
+        env = ALEEnvironment(args.rom)
+        args.input_size = 8
+        args.num_actions = env.numActions()
+    elif args.env_type == 'gym':
+        import gym
+        env = gym.make('CartPole-v0')
+        args.input_size = 4
+        args.num_actions = 2
 
 
     agent = NECAgent.NECAgent(sess, args)
@@ -93,6 +100,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--rom', type=str, default='roms/pong.bin',
                        help='Location of rom file')
+    parser.add_argument('--env_type', type=str, default='ALE',
+                       help='Environment to use (ALE or gym)')
 
     parser.add_argument('--training_iters', type=int, default=5000000,
                        help='Number of training iterations to run for')

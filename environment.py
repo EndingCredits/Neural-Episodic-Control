@@ -17,16 +17,11 @@ class ALEEnvironment:
         self.ale.setBool('display_screen', False)
 
         self.frame_skip = 4
-        self.history_len = 4
-
         self.initial_skip_actions = 5
-
         self.screen_width = 84
         self.screen_height = 84
-        
+
         self.last_screen = np.zeros((self.screen_width, self.screen_height))
-        self.screens = np.zeros((self.history_len, self.screen_width, self.screen_height))
-        self.history_counter = 0
 
         self.ale.loadROM(rom_file)
 
@@ -40,12 +35,12 @@ class ALEEnvironment:
         if ( self.ale.game_over()
             or not (train and self.life_lost) ):
             self.ale.reset_game()
-            self.reset_screens()
+            self.last_screen.fill(0.0)
         
             for i in range(self.initial_skip_actions):
                self.step(0)
         
-        state = self.get_screens()
+        state = self._get_screen()#self.get_screens()
         return state
 
     def step(self, action):
@@ -54,9 +49,9 @@ class ALEEnvironment:
         for i in range(self.frame_skip):
           reward += self.ale.act(self.actions[action])
         screen = self._get_screen()
-        self._add_screen(screen)
+        #self._add_screen(screen)
 
-        state = self.get_screens()
+        state = screen #self.get_screens()
         self.life_lost = (not (lives == self.ale.lives()))
         terminal = self.ale.game_over() or (self.life_lost and self.training)
         info = []
@@ -66,32 +61,15 @@ class ALEEnvironment:
     def numActions(self):
         return len(self.actions)
 
-    def _add_screen(self, screen):
-        self.screens[self.history_counter] = np.maximum(screen, self.last_screen)
-        self.last_screen = screen
-        self.history_counter = (self.history_counter + 1) % self.history_len
-
     def _get_screen(self):
         screen = self.ale.getScreenGrayscale()
         resized = np.array(cv2.resize(screen, (self.screen_width, self.screen_height)))
+        porcessed_screen = np.maximum(resized, self.last_screen)
+        self.last_screen = resized
         return resized
 
-    def reset_screens(self):
-        self.last_screen.fill(0.0)
-        self.screens.fill(0.0)
-        self.history_counter = 0
 
-    def get_screens(self):
-        ordered_screens = self.screens[permutation(self.history_counter, self.history_len)]
-        return ordered_screens
 
-def permutation(shift, num_elems):
-    r = range(num_elems)
-    if shift == 0:
-      return r
-    else:
-      p = r[shift:] + r[:shift]
-      return p
 
 
 
