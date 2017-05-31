@@ -29,6 +29,7 @@ Many thanks to all the authors whose code I've shamelessly ripped off, e.g. the 
 You'll have to look up how to install these, but this project uses the following libraries:
 * numpy
 * scikit-learn
+* annoy
 * tensorflow >1.0
 * OpenCV2
 * https://github.com/mgbellemare/Arcade-Learning-Environment
@@ -41,7 +42,10 @@ You'll also need to grab any roms you need.
 
 Technical improvements:
 * Implement a better approximate KNN algorithm
+  * Mostly done!
 * Add support for other environments (and alternative models)
+  * In progress
+* Merge history handling with saved trajectories and replay memory to save memory
 * Add saving and loading capabilities to model+dictionary (this might include partially implementing the DND in tensorflow)
 
 Experiments:
