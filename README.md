@@ -4,12 +4,12 @@ This is my attempt at replicating DeepMind's [Neural Episodic Control](https://a
 
 To run the code (after installing all dependencies:
 ```bash
-python NEC.py --rom [path/to/rom/file.bin]
+python main.py --rom [path/to/rom/file.bin]
 ```
 
 Further options can be found using:
 ```bash
-python NEC.py -h
+python main.py -h
 ```
 
 There is currently only training, without any testing and saving or loading. Scores are reported per episode, which is once per life.
@@ -21,7 +21,7 @@ N.B: There are a number of differences between this implementation and the origi
 * Various hyperparams may be slightly different.
 
 
-Many thanks to all the authors whose code I've shamelessly ripped off, e.g. the DND code and the environment wrapper (even though now they are probably unrecognisable). If you have a separate working implementation of NEC, I'd love to swap notes to see if I've made any errors or there are any good efficiency savings. Also, if you spot any (inevitable) bugs, please let me know.
+Many thanks to all the authors whose code I've shamelessly ripped off, e.g. the knn-dictionary code and the environment wrapper (even though now they are probably unrecognisable). If you have a separate working implementation of NEC, I'd love to swap notes to see if I've made any errors or there are any good efficiency savings. Also, if you spot any (inevitable) bugs, please let me know.
 
 
 ## Dependencies
