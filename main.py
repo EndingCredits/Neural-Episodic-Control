@@ -81,8 +81,9 @@ def main(_):
                 max_ep_reward = np.max(ep_rewards[ep_reward_last:])
                 avr_q = np.mean(qs[q_last:]) ; q_last = len(qs)
                 ep_reward_last = len(ep_rewards)
-            tqdm.write("{}, {:>7}/{}it | {:3n} episodes, q: {:4.3f}, avr_ep_r: {:4.1f}, max_ep_r: {:4.1f}, epsilon: {:4.3f}"\
-                .format(time.strftime("%H:%M:%S"), step, training_iters, num_eps, avr_q, avr_ep_reward, max_ep_reward, agent.epsilon))
+            dict_entries = agent.DND.tot_capacity()
+            tqdm.write("{}, {:>7}/{}it | {:3n} episodes, q: {:4.3f}, avr_ep_r: {:4.1f}, max_ep_r: {:4.1f}, epsilon: {:4.3f}, entries: {}"\
+                .format(time.strftime("%H:%M:%S"), step, training_iters, num_eps, avr_q, avr_ep_reward, max_ep_reward, agent.epsilon, dict_entries))
                  
 
 

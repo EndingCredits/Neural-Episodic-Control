@@ -25,6 +25,9 @@ class LRU_KNN:
     def _insert(self, keys, values, indices):
         pass
 
+    def queryable(self, k):
+        return self.curr_capacity > k
+
     # Returns the stored embeddings and values of the closest embeddings
     def query(self, keys, k):
         _, indices = self._nn(keys, k)
@@ -44,7 +47,7 @@ class LRU_KNN:
     def add(self, keys, values):
 
         skip_indices = []
-        if self.curr_capacity >= 1:
+        if self.queryable(1):
             dist, ind = self._nn(keys, k=1)
             for i, d in enumerate(dist):
                 if d[0] < self.delta:
@@ -75,10 +78,11 @@ class kdtree_dict(LRU_KNN):
     def __init__(self, capacity, key_dimension, delta=0.001, alpha=0.1):
         LRU_KNN.__init__(self, capacity, key_dimension, delta, alpha)
         self.tree = None
+        self.built_capacity = 0
 
     def _nn(self, keys, k):
-        dist, ind = self.tree.query(keys, k=k)
-        return dist, ind
+        dists, inds = self.tree.query(keys, k=k)
+        return dists, inds
 
     def _insert(self, keys, values, indices):
         for i, ind in enumerate(indices):
@@ -86,6 +90,59 @@ class kdtree_dict(LRU_KNN):
             self.embeddings[ind] = keys[i]
             self.values[ind] = values[i]
         self.tree = KDTree(self.embeddings[:self.curr_capacity])
+        self.built_capacity = self.curr_capacity
+
+    def queryable(self, k):
+        return (LRU_KNN.queryable(self, k) and (self.built_capacity > k))
+
+
+class annoy_dict(LRU_KNN):
+    def __init__(self, capacity, key_dimension, delta=0.001, alpha=0.1, batch_size=1000):
+        LRU_KNN.__init__(self, capacity, key_dimension, delta, alpha)
+
+        from annoy import AnnoyIndex
+        self.index = AnnoyIndex(key_dimension, metric='euclidean')
+
+        self.min_update_size = batch_size
+        self.cached_keys = []
+        self.cached_values = []
+        self.cached_indices = []
+
+        self.built_capacity = 0
+
+    def _nn(self, keys, k):
+        dists = [] ; inds = []
+        for key in keys:
+            ind, dist = self.index.get_nns_by_vector(key, k, include_distances=True)
+            dists.append(dist) ; inds.append(ind)
+        return dists, inds
+
+    def _insert(self, keys, values, indices):
+        self.cached_keys = self.cached_keys + keys
+        self.cached_values = self.cached_values + values
+        self.cached_indices = self.cached_indices + indices
+
+        if len(self.cached_indices) >= self.min_update_size:
+            self._rebuild_index()
+
+    def _rebuild_index(self):
+        self.index.unbuild()
+        for i, ind in enumerate(self.cached_indices):
+            new_key = self.cached_keys[i]
+            new_value = self.cached_values[i]
+            self.embeddings[ind] = new_key
+            self.values[ind] = new_value
+            self.index.add_item(ind, new_key)
+
+        self.cached_keys = []
+        self.cached_values = []
+        self.cached_indices = []
+
+        self.index.build(50)
+        self.built_capacity = self.curr_capacity
+
+    def queryable(self, k):
+        return (LRU_KNN.queryable(self, k) and (self.built_capacity > k))
 
 
 
@@ -97,7 +154,7 @@ class q_dictionary:
         self.dicts = []
 
         for a in xrange(num_actions):
-            new_dict = kdtree_dict(capacity, key_dimension, self.delta, self.alpha)
+            new_dict = annoy_dict(capacity, key_dimension, self.delta, self.alpha)
             self.dicts.append(new_dict)
 
     def _query(self, embeddings, actions, knn):
@@ -131,8 +188,21 @@ class q_dictionary:
             self.dicts[a].add(e, v)
         return True
 
-    def curr_capacity(self):
+    def min_capacity(self):
         min_val = 0
         for a in range(self.num_actions):
             min_val = min(min_val, self.dicts[a].curr_capacity)
         return min_val
+
+    def tot_capacity(self):
+        tot_val = 0
+        for a in range(self.num_actions):
+            tot_val += self.dicts[a].curr_capacity
+        return tot_val
+
+
+    def queryable(self, k):
+        for a in range(self.num_actions):
+            if not self.dicts[a].queryable(k): return False
+
+        return True
