@@ -41,14 +41,18 @@ You'll also need to grab any roms you need.
 ## TODO list:
 
 Technical improvements:
-* Implement a better approximate KNN algorithm
-  * Mostly done!
+* <s>Implement a better approximate KNN algorithm</s>
+  * Done!
 * Add support for other environments (and alternative models)
-  * In progress
-* Merge history handling with saved trajectories and replay memory to save memory
+  * In progress, almost done!
+* <s>Merge history handling with saved trajectories and replay memory to save memory</s>
+  * Done!
+* Replace saved trajectories (as list) with a trajectories class which also handles computing returns.
 * Add saving and loading capabilities to model+dictionary (this might include partially implementing the DND in tensorflow)
 
 Experiments:
+* Decay old elements in the dictionary to simulate alpha-updates
+  * Implemented and tested basic version
 * Devise a way to combine the DND with a DQN where the DQN takes over in the long term
 * Test with optimistically weighted value estimates as in [Particle Value Functions](https://arxiv.org/abs/1703.05820)
 * Test with a count-based exploration module

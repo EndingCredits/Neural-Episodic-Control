@@ -25,13 +25,21 @@ def main(_):
 
     if args.env_type == 'ALE':
         env = ALEEnvironment(args.rom)
-        args.input_size = 8
+        args.obs_size = [84,84]
         args.num_actions = env.numActions()
+        args.model = 'CNN'
+        args.history_len = 4
+
     elif args.env_type == 'gym':
         import gym
         env = gym.make('CartPole-v0')
-        args.input_size = 4
-        args.num_actions = 2
+        #env = gym.make('vgdlobstest-v0')
+        args.obs_size = [4]
+        args.num_actions = env.action_space.n
+        args.model = 'nn'
+        args.history_len = 0
+
+    #TODO: Determine, model, obs_size, and num_actions automatically from environment 
 
 
     agent = NECAgent.NECAgent(sess, args)
@@ -89,8 +97,10 @@ def main(_):
                 avr_q = np.mean(qs[q_last:]) ; q_last = len(qs)
                 ep_reward_last = len(ep_rewards)
             dict_entries = agent.DND.tot_capacity()
-            tqdm.write("{}, {:>7}/{}it | {:3n} episodes, q: {:4.3f}, avr_ep_r: {:4.1f}, max_ep_r: {:4.1f}, epsilon: {:4.3f}, entries: {}"\
-                .format(time.strftime("%H:%M:%S"), step, training_iters, num_eps, avr_q, avr_ep_reward, max_ep_reward, agent.epsilon, dict_entries))
+            tqdm.write("{}, {:>7}/{}it | {:3n} episodes,"\
+                .format(time.strftime("%H:%M:%S"), step, training_iters, num_eps)
+                +"q: {:4.3f}, avr_ep_r: {:4.1f}, max_ep_r: {:4.1f}, epsilon: {:4.3f}, entries: {}"\
+                .format(avr_q,avr_ep_reward, max_ep_reward, agent.epsilon, dict_entries))
                  
 
 
@@ -117,7 +127,7 @@ if __name__ == '__main__':
     parser.add_argument('--learn_step', type=int, default=4,
                        help='Number of steps in between learning updates')
 
-    parser.add_argument('--memory_size', type=int, default=50000,
+    parser.add_argument('--memory_size', type=int, default=500000,
                        help='Size of DND dictionary')
     parser.add_argument('--num_neighbours', type=int, default=50,
                        help='Number of nearest neighbours to sample from the DND each time')

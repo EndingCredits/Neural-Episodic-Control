@@ -54,11 +54,11 @@ def embedding_network(state, mask):
     # Embedding Part
     for i, block in enumerate(d_e):
         el = initial_elems
-        for j, layer in enuerate(block):
+        for j, layer in enumerate(block):
             context = c if j==0 and not i==0 else None
             el, _ = invariant_layer(el, layer, context=context, name='l' + str(i) + '_'  + str(j))
 
-        c = mask_and_pool(l, mask) # pool to get context for next block
+        c = mask_and_pool(el, mask) # pool to get context for next block
     
     # Fully connected part
     fc = c

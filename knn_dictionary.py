@@ -162,11 +162,12 @@ class q_dictionary:
     def _query(self, embeddings, actions, knn):
         # Return the embeddings and values of nearest neighbours from the
         #   DNDs for the given embeddings and actions
+        # This could probably be made more efficient by batching the querys by actions
         dnd_embeddings = [] ; dnd_values = []
         for i, a in enumerate(actions):
             e, v = self.dicts[a].query([embeddings[i]], knn)
             dnd_embeddings.append(e[0]) ; dnd_values.append(v[0])
-        # Return format is batch# x embedding
+        # Return format is batch# x dist# x embedding
         return dnd_embeddings, dnd_values
 
 
@@ -211,3 +212,98 @@ class q_dictionary:
             if not self.dicts[a].queryable(k): return False
 
         return True
+
+
+
+class alpha_KNN:
+    def __init__(self, capacity, key_dimension, delta=0.001, alpha=0.1, batch_size=1000):
+        self.capacity = capacity
+        self.curr_capacity = 0
+        self.delta = delta
+        self.alpha = 0.001
+
+        self.embeddings = np.zeros((capacity, key_dimension))
+        self.values = np.zeros(capacity)
+
+        self.weights = np.zeros(capacity)
+
+        from annoy import AnnoyIndex
+        self.index = AnnoyIndex(key_dimension, metric='euclidean')
+        self.index.set_seed(123)
+
+        self.min_update_size = batch_size
+        self.cached_keys = []
+        self.cached_values = []
+        self.cached_indices = []
+
+        self.built_capacity = 0
+
+    def _nn(self, keys, k):
+        dists = [] ; inds = []
+        for key in keys:
+            ind, dist = self.index.get_nns_by_vector(key + [1.0], k, include_distances=True)
+            dists.append(dist) ; inds.append(ind)
+        return dists, inds
+
+    def _insert(self, keys, values, indices):
+        self.cached_keys = self.cached_keys + keys
+        self.cached_values = self.cached_values + values
+        self.cached_indices = self.cached_indices + indices
+
+        if len(self.cached_indices) >= self.min_update_size:
+            self._rebuild_index()
+
+    def _rebuild_index(self):
+        self.index.unbuild()
+        for i, ind in enumerate(self.cached_indices):
+            new_key = self.cached_keys[i]
+            new_value = self.cached_values[i]
+            self.embeddings[ind] = new_key
+            self.values[ind] = new_value
+            self.weights[ind] = new_weight
+            self.index.add_item(ind, new_key + [new_weight])
+
+        self.cached_keys = []
+        self.cached_values = []
+        self.cached_indices = []
+
+        self.index.build(50)
+        self.built_capacity = self.curr_capacity
+
+    def queryable(self, k):
+        return (self.built_capacity > k)
+
+    # Returns the stored embeddings and values of the closest embeddings
+    def query(self, keys, k):
+        _, indices = self._nn(keys, k)
+        
+        embs = [] ; values = [] ; weights = []
+        for ind in indices:
+          embs.append(self.embeddings[ind])
+          values.append(self.values[ind])
+          weights.append(self.weights[ind])
+
+        return embs, values, weights
+
+    # Adds new embeddings (and values) to the dictionary
+    def add(self, keys, values):
+
+        if self.queryable(5):
+            dists, inds = self._nn(keys, k=5)
+            for ind, dist in enumerate(dists):
+                for i, d in enumerate(dist):
+                    index = inds[ind][i]
+                    self.weights[index] *= (1-self.alpha)
+
+        indices, keys_, values_ = [], [], []
+        for i, _ in enumerate(keys):
+            if self.curr_capacity >= self.capacity:
+                # find the LRU entry
+                index = np.argmin(self.weights)
+            else:
+                index = self.curr_capacity
+                self.curr_capacity+=1
+            self.weights[index] = 1.0
+            indices.append(index) ; keys_.append(keys[i]) ; values_.append(values[i])
+
+        self._insert(keys_, values_, indices)

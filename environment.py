@@ -48,6 +48,8 @@ class ALEEnvironment:
         lives = self.ale.lives()
         for i in range(self.frame_skip):
           reward += self.ale.act(self.actions[action])
+          if i==(self.frame_skip-1): self._get_screen() # get screen to update last
+
         screen = self._get_screen()
         #self._add_screen(screen)
 
