@@ -13,58 +13,63 @@ from environment import ALEEnvironment
 
 
 def main(_):
-  # Set precision for printing numpy arrays, useful for debugging
-  #np.set_printoptions(threshold='nan', precision=3, suppress=True)
 
   # Launch the graph
-  with tf.Session() as sess:
+  config = tf.ConfigProto()
+  config.gpu_options.allow_growth=True
+  with tf.Session(config=config) as sess:
 
+    # Set up training variables
     training_iters = args.training_iters
     display_step = args.display_step
-    
+    test_step = args.test_step
+    test_count = args.test_count
+    tests_done = 0
+    test_results = []
 
+    # Stats for display
+    ep_rewards = [] ; ep_reward_last = 0
+    qs = [] ; q_last = 0
+    avr_ep_reward = max_ep_reward = avr_q = 0.0
+    # Set precision for printing numpy arrays, useful for debugging
+    #np.set_printoptions(threshold='nan', precision=3, suppress=True)
+
+    # Create environment
+    #TODO: Determine, model, obs_size, and num_actions automatically from environment 
     if args.env_type == 'ALE':
         env = ALEEnvironment(args.rom)
-        args.obs_size = [84,84]
-        args.num_actions = env.numActions()
+        # Always use CNN model
         args.model = 'CNN'
+        args.preprocessor = 'deepmind'
+        args.obs_size = [84,84]
         args.history_len = 4
+        args.num_actions = env.numActions()
 
     elif args.env_type == 'gym':
         import gym
-        env = gym.make('CartPole-v0')
-        #env = gym.make('vgdlobstest-v0')
-        args.obs_size = [4]
-        args.num_actions = env.action_space.n
-        args.model = 'nn'
-        args.history_len = 0
+        #import gym_vgdl #This can be found on my github if you want to use it.
+        env = gym.make(args.env)
+        # Only use CNN model for now
+        args.model = 'CNN'
+        args.preprocessor = 'grayscale'
+        args.obs_size = list(env.observation_space.shape)[:2]
+        args.history_len = 2
+        args.num_actions = env.action_space.n #only works with discrete action spaces
 
-    #TODO: Determine, model, obs_size, and num_actions automatically from environment 
-
-
+    # Create agent
     agent = NECAgent.NECAgent(sess, args)
 
-    # Load saver after agent tf variables initialised
-    saver = tf.train.Saver()
-
-
-    # Training, act and learn
-
-    # Initialize the variables
+    # Initialize all tensorflow variables
     sess.run(tf.initialize_all_variables())
+
+    # Keep training until reach max iterations
 
     # Start Agent
     state = env.reset()
     agent.Reset(state)
     rewards = []
 
-    # Stats for display
-    ep_rewards = [] ; ep_reward_last = 0
-    qs = [] ; q_last = 0
-    avr_ep_reward = max_ep_reward = avr_q = 0.0
-
-    # Keep training until reach max iterations
-    for step in tqdm(range(training_iters), ncols=70):
+    for step in tqdm(range(training_iters), ncols=80):
 
         #env.render()
 
@@ -78,12 +83,24 @@ def main(_):
         qs.append(value)
 
         if terminal:
-            #tqdm.write("Resetting...")
             # Bookeeping
             ep_rewards.append(np.sum(rewards))
             rewards = []
 
-            # Reset environment
+            if step >= (tests_done)*test_step:
+                R_s = []
+                for i in tqdm(range(test_count), ncols=50, bar_format='Testing: |{bar}| {n_fmt}/{total_fmt}'):
+                    R = test_agent(agent, env)
+                    R_s.append(R)
+                tqdm.write("Tests: {}".format(R_s))
+                tests_done += 1
+                test_results.append({ 'step': step, 'scores': R_s, 'average': np.mean(R_s), 'max': np.max(R_s) })
+
+                #Save to file
+                summary = { 'params': args, 'tests': test_results }
+                np.save("results.npy", summary)
+
+            # Reset agent and environment
             state = env.reset()
             agent.Reset(state)
 
@@ -100,8 +117,24 @@ def main(_):
             tqdm.write("{}, {:>7}/{}it | {:3n} episodes,"\
                 .format(time.strftime("%H:%M:%S"), step, training_iters, num_eps)
                 +"q: {:4.3f}, avr_ep_r: {:4.1f}, max_ep_r: {:4.1f}, epsilon: {:4.3f}, entries: {}"\
-                .format(avr_q,avr_ep_reward, max_ep_reward, agent.epsilon, dict_entries))
+                .format(avr_q, avr_ep_reward, max_ep_reward, agent.epsilon, dict_entries))
                  
+
+def test_agent(agent, env):
+    try:
+        state = env.reset(train=False)
+    except:
+        state = env.reset()
+    agent.Reset(state, train=False)
+    R = 0
+
+    terminal = False
+    while not terminal:
+        action, value = agent.GetAction()
+        state, reward, terminal, info = env.step(action)
+        agent.Update(action, reward, state, terminal)
+        R += reward
+    return R
 
 
 
@@ -110,6 +143,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--rom', type=str, default='roms/pong.bin',
                        help='Location of rom file')
+    parser.add_argument('--env', type=str, default='Pong-v0',
+                       help='Gym environment to use')
     parser.add_argument('--env_type', type=str, default='ALE',
                        help='Environment to use (ALE or gym)')
 
@@ -117,12 +152,16 @@ if __name__ == '__main__':
                        help='Number of training iterations to run for')
     parser.add_argument('--display_step', type=int, default=25000,
                        help='Number of iterations between parameter prints')
+    parser.add_argument('--test_step', type=int, default=50000,
+                       help='Number of iterations between tests')
+    parser.add_argument('--test_count', type=int, default=5,
+                       help='Number of test episodes per test')
 
     parser.add_argument('--learning_rate', type=float, default=0.00001,
                        help='Learning rate for TD updates')
     parser.add_argument('--batch_size', type=int, default=32,
                        help='Size of batch for Q-value updates')
-    parser.add_argument('--replay_memory_size', type=int, default=50000,
+    parser.add_argument('--replay_memory_size', type=int, default=100000,
                        help='Size of replay memory')
     parser.add_argument('--learn_step', type=int, default=4,
                        help='Number of steps in between learning updates')
@@ -146,7 +185,6 @@ if __name__ == '__main__':
                        help='Final epsilon')
     parser.add_argument('--epsilon_anneal', type=int, default=None,
                        help='Epsilon anneal steps')
-
 
     parser.add_argument('--layer_sizes', type=str, default='64',
                        help='Hidden layer sizes for network, separate with comma')

@@ -5,6 +5,8 @@ import tensorflow as tf
 
 import knn_dictionary
 
+import cv2
+
 class NECAgent():
     def __init__(self, session, args):
 
@@ -23,7 +25,7 @@ class NECAgent():
         # DND parameters
         self.DND_size = args.memory_size
         self.delta = args.delta
-        self.dict_delta = 0.001
+        self.dict_delta = args.delta#0.001
         self.alpha = args.alpha
         self.number_nn = args.num_neighbours
 
@@ -45,12 +47,23 @@ class NECAgent():
         # Replay Memory
         self.memory = ReplayMemory(self.memory_size, self.obs_size)
 
+        # Preprocessor:
+        if args.preprocessor == 'deepmind':
+            self.preproc = deepmind_preprocessor
+        elif args.preprocessor == 'grayscale':
+          #incorrect spelling in order to not confuse those silly americans
+            self.preproc = greyscale_preprocessor
+        else:
+            self.preproc = default_preprocessor
+            #a lambda could be used here, but I think this makes more sense
+        
+
         # Tensorflow variables:
 
         # Model for Embeddings
         if self.model == 'CNN':
             from networks import deepmind_CNN
-            self.state = tf.placeholder("float", [None, self.history_len, 84, 84])
+            self.state = tf.placeholder("float", [None, self.history_len]+self.obs_size)
             self.state_embeddings, self.weights = deepmind_CNN(self.state)
         elif self.model == 'nn':
             from networks import feedforward_network
@@ -176,7 +189,7 @@ class NECAgent():
         self.training = train
 
         #TODO: turn these lists into a proper trajectory object
-        self.trajectory_observations = [obs]
+        self.trajectory_observations = [self.preproc(obs)]
         self.trajectory_embeddings = []
         self.trajectory_values = []
         self.trajectory_actions = []
@@ -195,9 +208,10 @@ class NECAgent():
         action = np.argmax(Qs) ; value = Qs[action]
 
         # get action via epsilon-greedy
-        if np.random.rand() < self.epsilon:
+        if self.training:
+          if np.random.rand() < self.epsilon:
             action = np.random.randint(0, self.n_actions)
-            value = Qs[action]
+            #value = Qs[action] # Paper uses maxQ, uncomment for on-policy updates
 
         self.trajectory_embeddings.append(embedding)
         self.trajectory_values.append(value)
@@ -209,7 +223,7 @@ class NECAgent():
         self.trajectory_actions.append(action)
         self.trajectory_rewards.append(reward)
         self.trajectory_t += 1
-        self.trajectory_observations.append(obs)
+        self.trajectory_observations.append(self.preproc(obs))
 
         self.step += 1
 
@@ -390,4 +404,18 @@ class trajectory_entry:
   action = None
   reward = None
   value = None
+
+
+# Preprocessors:
+def default_preprocessor(state):
+    return state
+
+def greyscale_preprocessor(state):
+    state = cv2.cvtColor(state,cv2.COLOR_BGR2GRAY)
+    return state
+
+def deepmind_preprocessor(state):
+    state = greyscale_preprocessor(state)
+    state = np.array(cv2.resize(state, (84, 84)))
+    return state
 
