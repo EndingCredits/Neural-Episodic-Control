@@ -75,15 +75,17 @@ class LRU_KNN:
 
 # Dict using ANNOY library for approximate KNN. Rebuilds the tree every n units added
 # Could probably be a bit more efficient
+#TODO: search through cache to find nn's too
 class annoy_dict(LRU_KNN):
-    def __init__(self, capacity, key_dimension, delta=0.001, alpha=0.1, batch_size=1000):
+    def __init__(self, capacity, key_dimension, delta=0.001, alpha=0.1, batch_size=100):
         LRU_KNN.__init__(self, capacity, key_dimension, delta, alpha)
 
         from annoy import AnnoyIndex
         self.index = AnnoyIndex(key_dimension, metric='euclidean')
         self.index.set_seed(123)
 
-        self.min_update_size = batch_size
+        self.initial_update_size = batch_size
+        self.min_update_size = self.initial_update_size
         self.cached_keys = []
         self.cached_values = []
         self.cached_indices = []
@@ -103,6 +105,7 @@ class annoy_dict(LRU_KNN):
         self.cached_indices = self.cached_indices + indices
 
         if len(self.cached_indices) >= self.min_update_size:
+            self.min_update_size = max(self.initial_update_size, self.curr_capacity*0.02)
             self._rebuild_index()
 
     def _rebuild_index(self):
