@@ -27,15 +27,14 @@ Many thanks to all the authors whose code I've shamelessly ripped off, e.g. the 
 ## Dependencies
 
 You'll have to look up how to install these, but this project uses the following libraries:
-* numpy
-* scikit-learn
+* numpy 
+* scikit-learn (can be commented out)
 * annoy
 * tensorflow >1.0
-* OpenCV2
-* https://github.com/mgbellemare/Arcade-Learning-Environment
+* OpenCV2 (only used in the preprocessors, could be replaced with a different library)
+* OpenAI Gym (if using gym)
+* https://github.com/mgbellemare/Arcade-Learning-Environment (if using ALE, you'll also need to grab any roms you need.)
 * tqdm
-
-You'll also need to grab any roms you need.
 
 
 ## TODO list:
@@ -43,8 +42,9 @@ You'll also need to grab any roms you need.
 Technical improvements:
 * <s>Implement a better approximate KNN algorithm</s>
   * Done!
-* Add support for other environments (and alternative models)
-  * In progress, almost done!
+* <s>Add support for other environments (and alternative models)</s>
+  * <s>In progress, almost done!</s>
+  * Done!
 * <s>Merge history handling with saved trajectories and replay memory to save memory</s>
   * Done!
 * Replace saved trajectories (as list) with a trajectories class which also handles computing returns.

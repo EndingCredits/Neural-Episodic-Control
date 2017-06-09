@@ -1,4 +1,5 @@
 """ Adapted from sudeep raja's implementation """
+from collections import OrderedDict
 import numpy as np
 from sklearn.neighbors import BallTree, KDTree
 
@@ -57,9 +58,11 @@ class LRU_KNN:
                     self.values[index] = self.values[index]*(1-self.alpha) + new_value*self.alpha
                     skip_indices.append(i)
 
+
         indices, keys_, values_ = [], [], []
         for i, _ in enumerate(keys):
-            if i in skip_indices: continue
+            if i in skip_indices:
+                continue
             if self.curr_capacity >= self.capacity:
                 # find the LRU entry
                 index = np.argmin(self.lru)

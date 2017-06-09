@@ -31,36 +31,59 @@ def main(_):
     ep_rewards = [] ; ep_reward_last = 0
     qs = [] ; q_last = 0
     avr_ep_reward = max_ep_reward = avr_q = 0.0
+
     # Set precision for printing numpy arrays, useful for debugging
     #np.set_printoptions(threshold='nan', precision=3, suppress=True)
-
+    
+    mode = args.model
     # Create environment
-    #TODO: Determine, model, obs_size, and num_actions automatically from environment 
     if args.env_type == 'ALE':
         env = ALEEnvironment(args.rom)
-        # Always use CNN model
-        args.model = 'CNN'
-        args.preprocessor = 'deepmind'
-        args.obs_size = [84,84]
-        args.history_len = 4
+        if mode is None: mode = 'DQN'
         args.num_actions = env.numActions()
 
     elif args.env_type == 'gym':
         import gym
-        #import gym_vgdl #This can be found on my github if you want to use it.
+        try:
+            import gym_vgdl #This can be found on my github if you want to use it.
+        except:
+            pass
         env = gym.make(args.env)
-        # Only use CNN model for now
+        if mode is None:
+            shape = env.observation_space.shape
+            if len(shape) is 3: mode = 'DQN'
+            elif shape[0] is None: mode = 'object'
+            else: mode = 'vanilla'
+        args.num_actions = env.action_space.n #only works with discrete action spaces
+
+    # Set agent variables
+    if mode=='DQN':
+        args.model = 'CNN'
+        args.preprocessor = 'deepmind'
+        args.obs_size = [84,84]
+        args.history_len = 4
+    elif mode=='image':
         args.model = 'CNN'
         args.preprocessor = 'grayscale'
         args.obs_size = list(env.observation_space.shape)[:2]
         args.history_len = 2
-        args.num_actions = env.action_space.n #only works with discrete action spaces
+    elif mode=='object':
+        args.model = 'object'
+        args.preprocessor = 'default'
+        args.obs_size = list(env.observation_space.shape)
+        args.history_len = 0
+    elif mode=='vanilla':
+        args.model = 'nn'
+        args.preprocessor = 'default'
+        args.obs_size = list(env.observation_space.shape)
+        args.history_len = 0
 
     # Create agent
     agent = NECAgent.NECAgent(sess, args)
 
     # Initialize all tensorflow variables
-    sess.run(tf.initialize_all_variables())
+    sess.run(tf.global_variables_initializer())
+
 
     # Keep training until reach max iterations
 
@@ -87,7 +110,7 @@ def main(_):
             ep_rewards.append(np.sum(rewards))
             rewards = []
 
-            if step >= (tests_done)*test_step:
+            if step >= (tests_done+1)*test_step:
                 R_s = []
                 for i in tqdm(range(test_count), ncols=50, bar_format='Testing: |{bar}| {n_fmt}/{total_fmt}'):
                     R = test_agent(agent, env)
@@ -98,7 +121,8 @@ def main(_):
 
                 #Save to file
                 summary = { 'params': args, 'tests': test_results }
-                np.save("results.npy", summary)
+                if args.save_file:
+                    np.save(args.save_file, summary)
 
             # Reset agent and environment
             state = env.reset()
@@ -121,6 +145,7 @@ def main(_):
                  
 
 def test_agent(agent, env):
+    #TODO: Add some stochasticity to this somehow so it doesn't just do the same deterministic run 5 times.
     try:
         state = env.reset(train=False)
     except:
@@ -143,10 +168,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--rom', type=str, default='roms/pong.bin',
                        help='Location of rom file')
-    parser.add_argument('--env', type=str, default='Pong-v0',
+    parser.add_argument('--env', type=str, default=None,
                        help='Gym environment to use')
-    parser.add_argument('--env_type', type=str, default='ALE',
-                       help='Environment to use (ALE or gym)')
+    parser.add_argument('--model', type=str, default=None,
+                       help='Leave None to automatically detect')
 
     parser.add_argument('--training_iters', type=int, default=5000000,
                        help='Number of training iterations to run for')
@@ -170,7 +195,7 @@ if __name__ == '__main__':
                        help='Size of DND dictionary')
     parser.add_argument('--num_neighbours', type=int, default=50,
                        help='Number of nearest neighbours to sample from the DND each time')
-    parser.add_argument('--alpha', type=float, default=0.1,
+    parser.add_argument('--alpha', type=float, default=0.5,
                        help='Alpha parameter for updating stored values')
     parser.add_argument('--delta', type=float, default=0.001,
                        help='Delta parameter for thresholding closeness of neighbours')
@@ -186,10 +211,15 @@ if __name__ == '__main__':
     parser.add_argument('--epsilon_anneal', type=int, default=None,
                        help='Epsilon anneal steps')
 
+    parser.add_argument('--save_file', type=str, default=None,
+                       help='Name of save file (leave None for no saving)')
+
     parser.add_argument('--layer_sizes', type=str, default='64',
-                       help='Hidden layer sizes for network, separate with comma')
+                       help='Hidden layer sizes for network, separate with comma (Not used)')
 
     args = parser.parse_args()
+
+    args.env_type = 'ALE' if args.env is None else 'gym'
 
     if args.epsilon_final == None: args.epsilon_final = args.epsilon
     if args.epsilon_anneal == None: args.epsilon_anneal = args.training_iters

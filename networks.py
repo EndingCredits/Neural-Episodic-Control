@@ -2,7 +2,8 @@ import tensorflow as tf
 from ops import linear, conv2d, flatten
 from ops import invariant_layer, mask_and_pool
 
-def deepmind_CNN(state, output_size=128):
+
+def deepmind_CNN(state, output_size=128, seed=123):
     w = {}
     initializer = tf.truncated_normal_initializer(0, 0.02)
     activation_fn = tf.nn.relu
@@ -10,9 +11,9 @@ def deepmind_CNN(state, output_size=128):
     state = tf.transpose(state, perm=[0, 2, 3, 1])
 
     l1, w['l1_w'], w['l1_b'] = conv2d(state,
-      32, [8, 8], [4, 4], initializer, activation_fn, 'NHWC', name='l1')
+      16, [8, 8], [4, 4], initializer, activation_fn, 'NHWC', name='l1')
     l2, w['l2_w'], w['l2_b'] = conv2d(l1,
-      64, [4, 4], [2, 2], initializer, activation_fn, 'NHWC', name='l2')
+      32, [4, 4], [2, 2], initializer, activation_fn, 'NHWC', name='l2')
     l3, w['l3_w'], w['l3_b'] = conv2d(l1, 
       64, [3, 3], [1, 1], initializer, activation_fn, 'NHWC', name='l3')
         
@@ -26,7 +27,7 @@ def deepmind_CNN(state, output_size=128):
     return embedding, [ v for v in w.values() ]
 
 
-def feedforward_network(state):
+def feedforward_network(state, seed=123):
     w = {}
     initializer = tf.truncated_normal_initializer(0, 0.02)
     activation_fn = tf.nn.relu
@@ -43,10 +44,10 @@ def feedforward_network(state):
     return embedding, [ v for v in w.values() ]
 
 
-def embedding_network(state, mask):
+def embedding_network(state, mask, seed=123):
     # Placeholder layer sizes
     d_e = [[64], [64, 128]]
-    d_o = [64, 64]
+    d_o = [128]
 
     # Build graph:
     initial_elems = state

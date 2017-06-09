@@ -50,7 +50,7 @@ def flatten(input_):
     if type(in_list[0]) is list:
       in_list = [flatten(elem) for elem in in_list ]
     
-    return tf.concat(0, [ tf.reshape(elem, [-1]) for elem in in_list])
+    return tf.concat([ tf.reshape(elem, [-1]) for elem in in_list], axis=0)
 
 
 

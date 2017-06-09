@@ -25,7 +25,7 @@ class NECAgent():
         # DND parameters
         self.DND_size = args.memory_size
         self.delta = args.delta
-        self.dict_delta = args.delta#0.001
+        self.dict_delta = 0.1
         self.alpha = args.alpha
         self.number_nn = args.num_neighbours
 
@@ -147,7 +147,7 @@ class NECAgent():
         for a in xrange(self.n_actions):
             if self.DND.dicts[a].queryable(self.number_nn):
                 q = self.session.run(self.pred_q, feed_dict={
-                    self.state_embeddings: [embedding], self.action: [a]})[0]
+                  self.state_embeddings: [embedding], self.action: [a]})[0]
             else:
                 q = 0.0
             qs.append(q)
@@ -203,11 +203,11 @@ class NECAgent():
         # Get state embedding
         embedding = self._get_state_embeddings([state])[0]
 
-        # get value
+        # Get Q-values
         Qs = self._predict(embedding)
         action = np.argmax(Qs) ; value = Qs[action]
 
-        # get action via epsilon-greedy
+        # Get action via epsilon-greedy
         if self.training:
           if np.random.rand() < self.epsilon:
             action = np.random.randint(0, self.n_actions)
