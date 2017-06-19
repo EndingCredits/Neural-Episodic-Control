@@ -13,6 +13,7 @@ class NECAgent():
         # Environment details
         self.obs_size = args.obs_size
         self.n_actions = args.num_actions
+        self.viewer = None
 
         # Agent parameters
         self.discount = args.discount
@@ -25,7 +26,7 @@ class NECAgent():
         # DND parameters
         self.DND_size = args.memory_size
         self.delta = args.delta
-        self.dict_delta = 0.1
+        self.dict_delta = args.delta#0.1
         self.alpha = args.alpha
         self.number_nn = args.num_neighbours
 
@@ -40,8 +41,8 @@ class NECAgent():
         # Stored variables
         self.step = 0
         self.started_training = False
-        self.seed = 123
-        self.curr_seed = self.seed
+        self.seed = args.seed
+        self.rng = np.random.RandomState(self.seed)
         self.session = session
 
         # Replay Memory
@@ -51,7 +52,7 @@ class NECAgent():
         if args.preprocessor == 'deepmind':
             self.preproc = deepmind_preprocessor
         elif args.preprocessor == 'grayscale':
-          #incorrect spelling in order to not confuse those silly americans
+            #incorrect spelling in order to not confuse those silly americans
             self.preproc = greyscale_preprocessor
         else:
             self.preproc = default_preprocessor
@@ -64,18 +65,20 @@ class NECAgent():
         if self.model == 'CNN':
             from networks import deepmind_CNN
             self.state = tf.placeholder("float", [None, self.history_len]+self.obs_size)
-            self.state_embeddings, self.weights = deepmind_CNN(self.state)
+            self.state_embeddings, self.weights = deepmind_CNN(self.state, seed=self.seed)
         elif self.model == 'nn':
             from networks import feedforward_network
             self.state = tf.placeholder("float", [None]+self.obs_size)
-            self.state_embeddings, self.weights = feedforward_network(self.state)
+            self.state_embeddings, self.weights =
+              feedforward_network(self.state, seed=self.seed)
         elif self.model == 'object':
             from networks import embedding_network
             self.state = tf.placeholder("float", [None]+self.obs_size)
             # mask to enable masking out of entries, last dim is kept for easy broadcasting
             self.masks = tf.placeholder("float", [None, None, 1])
             #tf.Variable(tf.ones("float", [None, None, 1]))
-            self.state_embeddings, self.weights = embedding_network(self.state, self.masks)
+            self.state_embeddings, self.weights = 
+              embedding_network(self.state, self.masks, seed=self.seed)
 
         # DNDs
         self.DND = knn_dictionary.q_dictionary(
@@ -200,6 +203,16 @@ class NECAgent():
     def GetAction(self):
         state = self._get_state() #trajectory_states[-1]
 
+        if False:
+            from gym.envs.classic_control import rendering
+            if self.viewer is None:
+                self.viewer = rendering.SimpleImageViewer()
+            im = state[-1]
+            w, h = im.shape
+            ret = np.empty((w, h, 3), dtype=np.uint8)
+            ret[:, :, :] = im[:, :, np.newaxis]*255
+            self.viewer.imshow(ret)
+            
         # Get state embedding
         embedding = self._get_state_embeddings([state])[0]
 
@@ -209,7 +222,7 @@ class NECAgent():
 
         # Get action via epsilon-greedy
         if self.training:
-          if np.random.rand() < self.epsilon:
+          if self.rng.rand() < self.epsilon:
             action = np.random.randint(0, self.n_actions)
             #value = Qs[action] # Paper uses maxQ, uncomment for on-policy updates
 
@@ -411,7 +424,7 @@ def default_preprocessor(state):
     return state
 
 def greyscale_preprocessor(state):
-    state = cv2.cvtColor(state,cv2.COLOR_BGR2GRAY)
+    state = cv2.cvtColor(state,cv2.COLOR_BGR2GRAY)/255.
     return state
 
 def deepmind_preprocessor(state):

@@ -4,7 +4,7 @@ import tensorflow as tf
 agent_types = ['image', 'objects', 'features']
 model_names = { 'image' : 'image', 'objects': 'object', 'features': 'vanilla' }
 
-games = ['aliens', 'boulderdash', 'chase']
+games = ['aliens', 'boulderdash', 'survivezombies']
 suffixes = { 'image' : '', 'objects': '_objects', 'features': '_features' }
 
 class defaults():
@@ -32,6 +32,7 @@ class defaults():
 for g in games:
   for a in agent_types:
     args = defaults()
+    args.seed = 123
     args.save_file = a + '_' + g
     args.env = 'vgdl_' + g + suffixes[a] + '-v0'
     args.model = model_names[a]

@@ -14,6 +14,9 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default=None,
                        help='Leave None to automatically detect')
 
+    parser.add_argument('--seed', type=int, default=123,
+                       help='Seed to initialise the agent with')
+
     parser.add_argument('--training_iters', type=int, default=5000000,
                        help='Number of training iterations to run for')
     parser.add_argument('--display_step', type=int, default=25000,
@@ -36,7 +39,7 @@ if __name__ == '__main__':
                        help='Size of DND dictionary')
     parser.add_argument('--num_neighbours', type=int, default=50,
                        help='Number of nearest neighbours to sample from the DND each time')
-    parser.add_argument('--alpha', type=float, default=0.5,
+    parser.add_argument('--alpha', type=float, default=0.1,
                        help='Alpha parameter for updating stored values')
     parser.add_argument('--delta', type=float, default=0.001,
                        help='Delta parameter for thresholding closeness of neighbours')
@@ -69,5 +72,5 @@ if __name__ == '__main__':
 
     print args
 
-    tf.app.run()
+    main(0)
 
