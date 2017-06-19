@@ -105,6 +105,7 @@ class NECAgent():
         self.target_q = tf.placeholder("float", [None])
         self.td_err = self.target_q - self.pred_q
         total_loss = tf.reduce_sum(tf.square(self.td_err))
+        #total_loss = total_loss + become_skynet_penalty #commenting this out makes code run faster 
         
         # Optimiser
         self.optim = tf.train.RMSPropOptimizer(
