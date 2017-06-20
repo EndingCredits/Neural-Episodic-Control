@@ -69,7 +69,7 @@ class NECAgent():
         elif self.model == 'nn':
             from networks import feedforward_network
             self.state = tf.placeholder("float", [None]+self.obs_size)
-            self.state_embeddings, self.weights =
+            self.state_embeddings, self.weights = \
               feedforward_network(self.state, seed=self.seed)
         elif self.model == 'object':
             from networks import embedding_network
@@ -77,7 +77,7 @@ class NECAgent():
             # mask to enable masking out of entries, last dim is kept for easy broadcasting
             self.masks = tf.placeholder("float", [None, None, 1])
             #tf.Variable(tf.ones("float", [None, None, 1]))
-            self.state_embeddings, self.weights = 
+            self.state_embeddings, self.weights = \
               embedding_network(self.state, self.masks, seed=self.seed)
 
         # DNDs
@@ -202,8 +202,13 @@ class NECAgent():
         return True
 
     def GetAction(self):
-        state = self._get_state() #trajectory_states[-1]
-
+        # TODO: Perform calculations on Update, then use aaved values to select actions
+        
+        # Get state embedding of last stored state
+        state = self._get_state()
+        embedding = self._get_state_embeddings([state])[0]
+        
+        # Rendering code for displaying raw state
         if False:
             from gym.envs.classic_control import rendering
             if self.viewer is None:
@@ -213,18 +218,15 @@ class NECAgent():
             ret = np.empty((w, h, 3), dtype=np.uint8)
             ret[:, :, :] = im[:, :, np.newaxis]*255
             self.viewer.imshow(ret)
-            
-        # Get state embedding
-        embedding = self._get_state_embeddings([state])[0]
 
         # Get Q-values
         Qs = self._predict(embedding)
         action = np.argmax(Qs) ; value = Qs[action]
 
         # Get action via epsilon-greedy
-        if self.training:
+        if True: #self.training:
           if self.rng.rand() < self.epsilon:
-            action = np.random.randint(0, self.n_actions)
+            action = self.rng.randint(0, self.n_actions)
             #value = Qs[action] # Paper uses maxQ, uncomment for on-policy updates
 
         self.trajectory_embeddings.append(embedding)
