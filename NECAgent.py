@@ -2,10 +2,11 @@ from __future__ import division
 
 import numpy as np
 import tensorflow as tf
+import scipy#.misc.imresize
+#import cv2
 
 import knn_dictionary
 
-import cv2
 
 class NECAgent():
     def __init__(self, session, args):
@@ -427,11 +428,13 @@ def default_preprocessor(state):
     return state
 
 def greyscale_preprocessor(state):
-    state = cv2.cvtColor(state,cv2.COLOR_BGR2GRAY)/255.
+    #state = cv2.cvtColor(state,cv2.COLOR_BGR2GRAY)/255.
+    np.dot(state[...,:3], [0.299, 0.587, 0.114])
     return state
 
 def deepmind_preprocessor(state):
     state = greyscale_preprocessor(state)
-    state = np.array(cv2.resize(state, (84, 84)))
+    #state = np.array(cv2.resize(state, (84, 84)))
+    state = scipy.misc.imresize(state, (84,84))
     return state
 
