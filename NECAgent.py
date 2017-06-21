@@ -429,7 +429,7 @@ def default_preprocessor(state):
 
 def greyscale_preprocessor(state):
     #state = cv2.cvtColor(state,cv2.COLOR_BGR2GRAY)/255.
-    np.dot(state[...,:3], [0.299, 0.587, 0.114])
+    state = np.dot(state[...,:3], [0.299, 0.587, 0.114])
     return state
 
 def deepmind_preprocessor(state):

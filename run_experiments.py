@@ -1,4 +1,4 @@
-import training
+import main
 import tensorflow as tf
 
 agent_types = ['image', 'objects', 'features']
@@ -33,8 +33,8 @@ for g in games:
   for a in agent_types:
     args = defaults()
     args.seed = 123
-    args.save_file = a + '_' + g
+    args.save_file = 'results/' + g + '_' + a + '_' + str(args.seed)
     args.env = 'vgdl_' + g + suffixes[a] + '-v0'
     args.model = model_names[a]
-    training.run_agent(args)
+    main.run_agent(args)
     tf.reset_default_graph()

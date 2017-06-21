@@ -49,11 +49,14 @@ class LRU_KNN:
     def add(self, keys, values):
 
         skip_indices = []
-        if self.queryable(1):
+        #Doesn't seem to work properly, and design is cleaner (and faster without)
+        if False: #self.queryable(1):
             dist, ind = self._nn(keys, k=1)
             for i, d in enumerate(dist):
-                if d[0] < self.delta:
-                    index = ind[i][0]
+                index = ind[i][0]
+                new_emb = keys[i]
+                retrieved_emb = self.embeddings[index]
+                if np.allclose(new_emb, retrieved_emb, atol=self.delta, rtol=0.0):
                     new_value = values[i]
                     self.values[index] = self.values[index]*(1-self.alpha) + new_value*self.alpha
                     skip_indices.append(i)

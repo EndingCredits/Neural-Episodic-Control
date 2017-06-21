@@ -32,7 +32,7 @@ def deepmind_CNN(state, output_size=128, seed=123):
     #l2_flat = tf.reshape(l2, [-1, reduce(lambda x, y: x * y, shape[1:])])
       
     embedding, w['l4_w'], w['l4_b'] = linear(l3_flat, 128,
-      activation_fn=activation_fn, name='value_hid')
+      activation_fn=tf.identity, name='value_hid')
 
     # Returns the network output, parameters
     return embedding, w.values()
