@@ -118,7 +118,7 @@ def run_agent(args):
                 test_results.append({ 'step': step, 'scores': R_s, 'average': np.mean(R_s), 'max': np.max(R_s) })
 
                 #Save to file
-                summary = { 'params': args, 'tests': test_results }
+                summary = { 'params': vars(args), 'tests': test_results }
                 if args.save_file is not None:
                     np.save(args.save_file, summary)
 
