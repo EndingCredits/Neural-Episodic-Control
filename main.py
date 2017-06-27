@@ -89,6 +89,7 @@ def run_agent(args):
     state = env.reset()
     agent.Reset(state)
     rewards = []
+    terminal = False
 
     for step in tqdm(range(training_iters), ncols=80):
 
@@ -108,7 +109,7 @@ def run_agent(args):
             ep_rewards.append(np.sum(rewards))
             rewards = []
 
-            if step >= (tests_done+1)*test_step:
+            if step >= (tests_done)*test_step:
                 R_s = []
                 for i in tqdm(range(test_count), ncols=50, bar_format='Testing: |{bar}| {n_fmt}/{total_fmt}'):
                     R = test_agent(agent, env)
@@ -140,6 +141,29 @@ def run_agent(args):
                 .format(time.strftime("%H:%M:%S"), step, training_iters, num_eps)
                 +"q: {:4.3f}, avr_ep_r: {:4.1f}, max_ep_r: {:4.1f}, epsilon: {:4.3f}, entries: {}"\
                 .format(avr_q, avr_ep_reward, max_ep_reward, agent.epsilon, dict_entries))
+    
+    # Continue until end of episode
+    step = training_iters
+    while not terminal:
+        # Act, and add 
+        action, value = agent.GetAction()
+        state, reward, terminal, info = env.step(action)
+        agent.Update(action, reward, state, terminal)
+        step += 1
+    
+    # Final test       
+    R_s = []
+    for i in tqdm(range(test_count), ncols=50, bar_format='Testing: |{bar}| {n_fmt}/{total_fmt}'):
+        R = test_agent(agent, env)
+        R_s.append(R)
+    tqdm.write("Tests: {}".format(R_s))
+    tests_done += 1
+    test_results.append({ 'step': step, 'scores': R_s, 'average': np.mean(R_s), 'max': np.max(R_s) })
+
+    #Save to file
+    summary = { 'params': vars(args), 'tests': test_results }
+    if args.save_file is not None:
+        np.save(args.save_file, summary)
                  
 
 def test_agent(agent, env):

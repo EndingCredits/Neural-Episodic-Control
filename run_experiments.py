@@ -2,16 +2,16 @@ import main
 import tensorflow as tf
 
 agent_types = ['image', 'objects', 'features']
-model_names = { 'image' : 'image', 'objects': 'object', 'features': 'vanilla' }
-
 games = ['aliens', 'boulderdash', 'survivezombies']
+
+model_names = { 'image' : 'image', 'objects': 'object', 'features': 'vanilla' }
 suffixes = { 'image' : '', 'objects': '_objects', 'features': '_features' }
 
 class defaults():
     env_type='gym'
-    training_iters=1250000
+    training_iters=1000000
     display_step=25000
-    test_step=125000
+    test_step=50000
     test_count=50
     
     learning_rate=0.00001
@@ -25,9 +25,9 @@ class defaults():
 
     n_step=100
     discount=0.99
-    epsilon=0.1
+    epsilon=0.99
     epsilon_final=0.1
-    epsilon_anneal=500000
+    epsilon_anneal=50000
 
 for g in games:
   for a in agent_types:
