@@ -32,7 +32,7 @@ class defaults():
 for g in games:
   for a in agent_types:
     args = defaults()
-    args.seed = 123
+    args.seed = 1234567
     args.save_file = 'results/' + g + '_' + a + '_' + str(args.seed)
     args.env = 'vgdl_' + g + suffixes[a] + '-v0'
     args.model = model_names[a]
