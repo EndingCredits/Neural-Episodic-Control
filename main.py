@@ -211,7 +211,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--training_iters', type=int, default=5000000,
                        help='Number of training iterations to run for')
-    parser.add_argument('--display_step', type=int, default=5000,
+    parser.add_argument('--display_step', type=int, default=25000,
                        help='Number of iterations between parameter prints')
     parser.add_argument('--test_step', type=int, default=50000,
                        help='Number of iterations between tests')

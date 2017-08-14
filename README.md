@@ -41,14 +41,14 @@ You'll have to look up how to install these, but this project uses the following
 This is to train an agent to play the Roll-a-ball game from the Unity tutorial. Video of agent here: https://www.youtube.com/watch?v=6O93BOMFdUI
 
 * Install the Unity Python socket API library found here: https://github.com/chetan51/unity-api
-* Download the Unity project (URL to follow shortly)
+* Unzip the Unity project
 * Run the `proxy-server/run.py` server from the python library
 * Compile and run the main scene from the Unity project (or just run the binary)
 * Run the agent with `python main.py --unity_test 1`
 
 The Unity engine and the agent communicate by sending information to and from the running server. Observations from the engine are given in the form of list of relevant objects in the scene. Each object is turned into a feature vector encoding object class, position, and velocity.
  
-N.B: There is a bug in the environemnt code which means that sometimes the environment doesn't reset properly.
+N.B: There is a bug in the environment code which means that sometimes the environment doesn't reset properly. This shouldn't affect agent performance, but means the number of episodes is incorrectly reported.
 
 
 ## TODO list:
