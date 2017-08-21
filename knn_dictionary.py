@@ -77,6 +77,19 @@ class LRU_KNN:
 
         self._insert(keys_, values_, indices)
         self.tm += 0.01
+        
+    def save(self, filename):
+        save_data = [ self.embeddings,
+                      self.values,
+                      self.curr_capacity,
+                      self.lru,
+                      self.tm ]
+        np.save(filename, save_data)
+    
+    def load(self, filename):
+        save_data = np.load(filename)
+        self.embeddings, self.values, self.curr_capacity, self.lru, self.tm = save_data
+        self._rebuild_index()
 
 
 # Dict using ANNOY library for approximate KNN. Rebuilds the tree every n units added
@@ -112,9 +125,9 @@ class annoy_dict(LRU_KNN):
 
         if len(self.cached_indices) >= self.min_update_size:
             self.min_update_size = max(self.initial_update_size, self.curr_capacity*0.02)
-            self._rebuild_index()
+            self._update_index()
 
-    def _rebuild_index(self):
+    def _update_index(self):
         self.index.unbuild()
         for i, ind in enumerate(self.cached_indices):
             new_key = self.cached_keys[i]
@@ -127,6 +140,13 @@ class annoy_dict(LRU_KNN):
         self.cached_values = []
         self.cached_indices = []
 
+        self.index.build(50)
+        self.built_capacity = self.curr_capacity
+        
+    def _rebuild_index(self):
+        self.index.unbuild()
+        for ind, emb in enumerate(self.embeddings[:self.curr_capacity]):
+            self.index.add_item(ind, emb)
         self.index.build(50)
         self.built_capacity = self.curr_capacity
 
@@ -150,6 +170,9 @@ class kdtree_dict(LRU_KNN):
             #print "num: " + str(i) + ", index: " + str(ind)
             self.embeddings[ind] = keys[i]
             self.values[ind] = values[i]
+        self._rebuild_index()
+            
+    def _rebuild_index(self):
         self.tree = KDTree(self.embeddings[:self.curr_capacity])
         self.built_capacity = self.curr_capacity
 
@@ -221,8 +244,14 @@ class q_dictionary:
             if not self.dicts[a].queryable(k): return False
 
         return True
-
-
+        
+    def save(self, name):
+        for a in range(self.num_actions):
+            self.dicts[a].save(name + '_dict_' + str(a) + '.npy')
+        
+    def load(self, name):
+        for a in range(self.num_actions):
+            self.dicts[a].load(name + '_dict_' + str(a) + '.npy')
 
 class alpha_KNN:
     def __init__(self, capacity, key_dimension, delta=0.001, alpha=0.1, batch_size=1000):

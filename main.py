@@ -99,7 +99,7 @@ def run_agent(args):
     agent.Reset(state)
     rewards = []
     terminal = False
-
+    
     for step in tqdm(range(training_iters), ncols=80):
 
         #env.render()
@@ -150,6 +150,9 @@ def run_agent(args):
                 .format(time.strftime("%H:%M:%S"), step, training_iters, num_eps)
                 +"q: {:4.3f}, avr_ep_r: {:4.1f}, max_ep_r: {:4.1f}, epsilon: {:4.3f}, entries: {}"\
                 .format(avr_q, avr_ep_reward, max_ep_reward, agent.epsilon, dict_entries))
+                
+            #agent.Save('chk')
+
     
     # Continue until end of episode
     step = training_iters
