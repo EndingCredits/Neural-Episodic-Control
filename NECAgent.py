@@ -12,7 +12,7 @@ class NECAgent():
     def __init__(self, session, args):
 
         # Environment details
-        self.obs_size = args.obs_size
+        self.obs_size = list(args.obs_size)
         self.n_actions = args.num_actions
         self.viewer = None
 
@@ -61,18 +61,19 @@ class NECAgent():
         
 
         # Tensorflow variables:
-
+        
         # Model for Embeddings
-        if self.model == 'CNN':
+        with tf.variable_scope('agent_model'):
+          if self.model == 'CNN':
             from networks import deepmind_CNN
             self.state = tf.placeholder("float", [None, self.history_len]+self.obs_size)
             self.state_embeddings, self.weights = deepmind_CNN(self.state, seed=self.seed)
-        elif self.model == 'nn':
+          elif self.model == 'nn':
             from networks import feedforward_network
             self.state = tf.placeholder("float", [None]+self.obs_size)
             self.state_embeddings, self.weights = \
               feedforward_network(self.state, seed=self.seed)
-        elif self.model == 'object':
+          elif self.model == 'object':
             from networks import embedding_network
             self.state = tf.placeholder("float", [None]+self.obs_size)
             # mask to enable masking out of entries, last dim is kept for easy broadcasting
@@ -112,6 +113,9 @@ class NECAgent():
         self.optim = tf.train.RMSPropOptimizer(
           self.learning_rate, decay=0.9, epsilon=0.01).minimize(total_loss)
           # These are the optimiser settings used by DeepMind
+          
+        self.model_weights = tf.get_collection(tf.GraphKeys.VARIABLES, scope='agent_model')
+        self.saver = tf.train.Saver(self.model_weights)
 
 
     def _get_state(self, t=-1):
@@ -277,6 +281,17 @@ class NECAgent():
 
                 self.DND.add(self.trajectory_embeddings, self.trajectory_actions, returns)
         return True
+        
+        
+    def Save(self, save_dir):
+        self.saver.save(self.session, save_dir + '/model.ckpt')
+        self.DND.save(save_dir + '/DNDdict')
+
+    def Load(self, save_dir):
+        ckpt = tf.train.get_checkpoint_state(save_dir)
+        print("Loading model from {}".format(ckpt.model_checkpoint_path))
+        self.saver.restore(self.session, ckpt.model_checkpoint_path)
+        self.DND.load(save_dir + '/DNDdict')
 
 
 def batch_objects(input_list):
