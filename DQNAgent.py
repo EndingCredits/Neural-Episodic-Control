@@ -5,10 +5,12 @@ import tensorflow as tf
 import scipy#.misc.imresize
 #import cv2
 
+from ops import linear
+
 import knn_dictionary
 
 
-class NECAgent():
+class DQNAgent():
     def __init__(self, session, args):
 
         # Environment details
@@ -24,20 +26,15 @@ class NECAgent():
         self.epsilon_final = args.epsilon_final
         self.epsilon_anneal = args.epsilon_anneal
 
-        # DND parameters
-        self.DND_size = args.memory_size
-        self.delta = args.delta
-        self.dict_delta = args.delta#0.1
-        self.alpha = args.alpha
-        self.number_nn = args.num_neighbours
-
         # Training parameters
-        self.model = args.model
+        self.model_type = args.model
         self.history_len = args.history_len
         self.memory_size = args.replay_memory_size
         self.batch_size = args.batch_size
         self.learning_rate = args.learning_rate
         self.learn_step = args.learn_step
+        
+        self.name = "Agent"
 
         # Stored variables
         self.step = 0
@@ -63,44 +60,37 @@ class NECAgent():
         # Tensorflow variables:
 
         # Model for Embeddings
-        if self.model == 'CNN':
+        if self.model_type == 'CNN':
             from networks import deepmind_CNN
-            self.state = tf.placeholder("float", [None, self.history_len]+self.obs_size)
-            self.state_embeddings, self.weights = deepmind_CNN(self.state, seed=self.seed)
-        elif self.model == 'nn':
+            state_dim = [None, self.history_len] + self.obs_size
+            model = deepmind_CNN
+        elif self.model_type == 'nn':
             from networks import feedforward_network
-            self.state = tf.placeholder("float", [None]+self.obs_size)
-            self.state_embeddings, self.weights = \
-              feedforward_network(self.state, seed=self.seed)
-        elif self.model == 'object':
-            from networks import embedding_network
-            self.state = tf.placeholder("float", [None]+self.obs_size)
-            # mask to enable masking out of entries, last dim is kept for easy broadcasting
-            self.masks = tf.placeholder("float", [None, None, 1])
-            #tf.Variable(tf.ones("float", [None, None, 1]))
-            self.state_embeddings, self.weights = \
-              embedding_network(self.state, self.masks, seed=self.seed)
+            state_dim = [None] + self.obs_size
+            model = feedforward_network
+        elif self.model_type == 'object':
+            from networks import object_embedding_network
+            state_dim = [None] + self.obs_size
+            model = object_embedding_network
+            
+        self.state = tf.placeholder("float", state_dim)
+            
+        with tf.variable_scope(self.name + '_pred'):
+            emb, _ = model(self.state)
+            self.pred_qs, _, _ = linear(tf.nn.relu(emb), self.n_actions)
+        with tf.variable_scope(self.name + '_target', reuse=False):
+            emb, _ = model(self.state)
+            self.target_pred_qs, _, _ = linear(tf.nn.relu(emb), self.n_actions)
+            
+        self.pred_weights = tf.get_collection(
+            tf.GraphKeys.GLOBAL_VARIABLES, scope=self.name+'_pred')
+        self.targ_weights = tf.get_collection(
+            tf.GraphKeys.GLOBAL_VARIABLES, scope=self.name+'_target') 
 
-        # DNDs
-        self.DND = knn_dictionary.q_dictionary(
-          self.DND_size, self.state_embeddings.get_shape()[-1], self.n_actions,
-          self.dict_delta, self.alpha)
-
-        self.action = tf.placeholder(tf.int8, [None])
-
-        # Retrieve info from DND dictionary
-        embs_and_values = tf.py_func(self.DND._query,
-          [self.state_embeddings, self.action, self.number_nn], [tf.float64, tf.float64])
-        self.dnd_embeddings = tf.to_float(embs_and_values[0])
-        self.dnd_values = tf.to_float(embs_and_values[1])
-
-        # DND calculation
-        # (takes advantage of broadcasting)
-        square_diff = tf.square(self.dnd_embeddings - tf.expand_dims(self.state_embeddings, 1))
-        distances = tf.reduce_sum(square_diff, axis=2) + [self.delta]
-        weightings = 1.0 / distances
-        normalised_weightings = weightings / tf.reduce_sum(weightings, axis=1, keep_dims=True)
-        self.pred_q = tf.reduce_sum(self.dnd_values * normalised_weightings, axis=1)
+        self.action = tf.placeholder('int64', [None])
+        action_one_hot = tf.one_hot(self.action, self.n_actions, 1.0, 0.0)
+        q_acted = tf.reduce_sum(self.pred_qs * action_one_hot, axis=1)
+        self.pred_q = q_acted
         
         # Loss Function
         self.target_q = tf.placeholder("float", [None])
@@ -133,57 +123,35 @@ class NECAgent():
         return state
 
 
-    def _get_state_embeddings(self, states):
-        # Returns the DND hashes for the given states
-        if self.obs_size[0] == None:
-            states_, masks = batch_objects(states)
-            embeddings = self.session.run(self.state_embeddings,
-              feed_dict={self.state: states_, self.masks: masks})
-        else:    
-            embeddings = self.session.run(self.state_embeddings, feed_dict={self.state: states})
-        return embeddings
-
-
-    def _predict(self, embedding):
-        # Return action values for given embedding
-
+    def _predict(self, state):
         # calculate Q-values
-        qs = []
-        for a in xrange(self.n_actions):
-            if self.DND.dicts[a].queryable(self.number_nn):
-                q = self.session.run(self.pred_q, feed_dict={
-                  self.state_embeddings: [embedding], self.action: [a]})[0]
-            else:
-                q = 0.0
-            qs.append(q)
-
+        qs = self.session.run(self.pred_qs, feed_dict={
+                  self.state: [state]})[0]
+        
         # Return Q values
         return qs
+        
+    def _eval(self, state):
+        # calculate Q-values
+        qs = self.session.run(self.target_pred_qs, feed_dict={
+                  self.state: [state]})[0]
+        
+        # Return Q values
+        return np.max(qs)
 
 
     def _train(self, states, actions, Q_targets):
 
-        if not self.DND.queryable(self.number_nn):
-            return False
-
         self.started_training = True
-
+        
         if self.obs_size[0] == None:
-            states_, masks = batch_objects(states)
+            states, _ = batch_objects(states)
 
-            feed_dict = {
-              self.state: states_,
-              self.masks: masks,
-              self.target_q: Q_targets,
-              self.action: actions
-            }
-
-        else:
-            feed_dict = {
-              self.state: states,
-              self.target_q: Q_targets,
-              self.action: actions
-            }
+        feed_dict = {
+          self.state: states,
+          self.target_q: Q_targets,
+          self.action: actions
+        }
 
         self.session.run(self.optim, feed_dict=feed_dict)
         
@@ -195,34 +163,25 @@ class NECAgent():
 
         #TODO: turn these lists into a proper trajectory object
         self.trajectory_observations = [self.preproc(obs)]
-        self.trajectory_embeddings = []
         self.trajectory_values = []
         self.trajectory_actions = []
         self.trajectory_rewards = []
         self.trajectory_t = 0
         return True
 
+
     def GetAction(self):
         # TODO: Perform calculations on Update, then use aaved values to select actions
         
         # Get state embedding of last stored state
         state = self._get_state()
-        embedding = self._get_state_embeddings([state])[0]
-        
-        # Rendering code for displaying raw state
-        if False:
-            from gym.envs.classic_control import rendering
-            if self.viewer is None:
-                self.viewer = rendering.SimpleImageViewer()
-            im = state[-1]
-            w, h = im.shape
-            ret = np.empty((w, h, 3), dtype=np.uint8)
-            ret[:, :, :] = im[:, :, np.newaxis]*255
-            self.viewer.imshow(ret)
 
         # Get Q-values
-        Qs = self._predict(embedding)
-        action = np.argmax(Qs) ; value = Qs[action]
+        Qs = self._predict(state)
+        action = np.argmax(Qs)
+        
+        targ_Q = self._eval(state)
+        value = targ_Q
 
         # Get action via epsilon-greedy
         if True: #self.training:
@@ -230,7 +189,6 @@ class NECAgent():
             action = self.rng.randint(0, self.n_actions)
             #value = Qs[action] # Paper uses maxQ, uncomment for on-policy updates
 
-        self.trajectory_embeddings.append(embedding)
         self.trajectory_values.append(value)
         return action, value
 
@@ -274,8 +232,10 @@ class NECAgent():
                         R_t = R_t * self.discount + self.trajectory_rewards[i]
                     returns.append(R_t)
                     self.memory.add(self.trajectory_observations[t], self.trajectory_actions[t], R_t, (t==(self.trajectory_t-1)))
-
-                self.DND.add(self.trajectory_embeddings, self.trajectory_actions, returns)
+                    
+            if self.step % 1000 == 0:
+                ops = [ self.targ_weights[i].assign(self.pred_weights[i]) for i in range(len(self.targ_weights))]
+                self.session.run(ops)
         return True
 
 
@@ -360,67 +320,6 @@ class ReplayMemory:
       states.append(self._get_state(index, seq_len))
 
     return states, self.actions[indexes], self.returns[indexes]
-
-
-class trajectory:
-# Get_Action requires last 4 obs to make a prediction
-# Observations need to be stored to make prediction
-# Actions and rewards need to be stored to calculate returns
-# Values can be stored to prevent need from computing them twice
-# Embeddings can be stored to prevent need from computing them twice (only needed for NEC)
-    def __init__(self, obs_size):
-        self.obs_size = obs_size
-
-        self.trajectory = []
-        self.current_entry = trajectory_entry()
-        self.t = 0
-
-        self.trajectory_observations = [obs]
-        self.trajectory_embeddings = []
-        self.trajectory_values = []
-        self.trajectory_actions = []
-        self.trajectory_rewards = []
-
-    def _get_entry(self, t):
-        if t==-1 or t==self.t: return self.current_entry
-        return self.trajectory[t]
-
-    def step(self):
-        self.trajectory.append(self.current_entry)
-        self.current_entry = trajectory_entry()
-        self.t += 1
-
-    def get_state(self, t=-1, his_len=1):
-        if t==-1: t = self.t
-
-        state = np.zeros([self.history_len]+self.obs_size)
-        for i in range(his_len):
-            state[i] = self._get_entry(t-i).observation
-        return state
-
-    def get_returns(self, n_step):
-
-        for t in xrange(self.trajectory_t):
-            if self.trajectory_t - t > self.n_steps:
-                #Get truncated return
-                start_t = t + self.n_steps
-                R_t = self.trajectory_values[start_t]
-            else:
-                start_t = self.trajectory_t 
-                R_t = 0
-                        
-            for i in xrange(start_t-1, t, -1):
-                R_t = R_t * self.discount + self.trajectory_rewards[i]
-
-        return obs, embeddings, actions, returns
-
-
-class trajectory_entry:
-  observation = None
-  embedding = None
-  action = None
-  reward = None
-  value = None
 
 
 # Preprocessors:
