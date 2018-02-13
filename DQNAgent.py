@@ -69,9 +69,10 @@ class DQNAgent():
             state_dim = [None] + self.obs_size
             model = feedforward_network
         elif self.model_type == 'object':
-            from networks import object_embedding_network
+            from networks import object_embedding_network2
             state_dim = [None] + self.obs_size
-            model = object_embedding_network
+            model = lambda x: object_embedding_network2( x, args.emb_layers, args.out_layers)
+            
             
         self.state = tf.placeholder("float", state_dim)
             
@@ -131,21 +132,35 @@ class DQNAgent():
         # Return Q values
         return qs
         
-    def _eval(self, state):
+    def _eval(self, states):
         # calculate Q-values
         qs = self.session.run(self.target_pred_qs, feed_dict={
-                  self.state: [state]})[0]
+                  self.state: states})
         
         # Return Q values
-        return np.max(qs)
+        return np.max(qs, axis=1)
 
 
-    def _train(self, states, actions, Q_targets):
+    def _train(self, states, actions, rewards, poststates, terminals):
 
         self.started_training = True
         
         if self.obs_size[0] == None:
             states, _ = batch_objects(states)
+            poststates, _ = batch_objects(poststates)
+            
+        if False:
+            #Predict action with current network
+            action = np.argmax(self.pred_qs.eval({self.state: states}), axis=1)
+            action_one_hot = np.eye(self.n_actions)[action] #neat little trick for getting one-hot
+
+            # Get value of action from target network
+            V_t1 = self.target_pred_qs.eval({self.state: states})
+        else:
+            V_t1 = self._eval(poststates)
+        V_t1 = np.multiply(np.ones(np.shape(terminals)) - terminals, V_t1)
+        
+        Q_targets = self.discount * V_t1 + rewards
 
         feed_dict = {
           self.state: states,
@@ -180,8 +195,8 @@ class DQNAgent():
         Qs = self._predict(state)
         action = np.argmax(Qs)
         
-        targ_Q = self._eval(state)
-        value = targ_Q
+        #targ_Q = self._eval(state)
+        value = Qs[action]#targ_Q
 
         # Get action via epsilon-greedy
         if True: #self.training:
@@ -210,28 +225,15 @@ class DQNAgent():
 
             if self.memory.count > self.batch_size*2 and (self.step % self.learn_step) == 0:
                 # Get transition sample from memory
-                s, a, R = self.memory.sample(self.batch_size, self.history_len)
+                s, a, R, s_, t = self.memory.sample(self.batch_size, self.history_len)
                 # Run optimization op (backprop)
-                self._train(s, a, R)
+                self._train(s, a, R, s_, t)
 
 
             # Add to replay memory and DND
             if terminal:
-                # Calculate returns
-                returns = []
-                for t in xrange(self.trajectory_t):
-                    if self.trajectory_t - t > self.n_steps:
-                        #Get truncated return
-                        start_t = t + self.n_steps
-                        R_t = self.trajectory_values[start_t]
-                    else:
-                        start_t = self.trajectory_t
-                        R_t = 0
-                        
-                    for i in xrange(start_t-1, t, -1):
-                        R_t = R_t * self.discount + self.trajectory_rewards[i]
-                    returns.append(R_t)
-                    self.memory.add(self.trajectory_observations[t], self.trajectory_actions[t], R_t, (t==(self.trajectory_t-1)))
+              for t in xrange(self.trajectory_t):
+                self.memory.add(self.trajectory_observations[t], self.trajectory_actions[t], self.trajectory_rewards[t], (t==(self.trajectory_t-1)))
                     
             if self.step % 1000 == 0:
                 ops = [ self.targ_weights[i].assign(self.pred_weights[i]) for i in range(len(self.targ_weights))]
@@ -264,16 +266,16 @@ class ReplayMemory:
     else:
         self.observations = np.empty([self.memory_size]+self.obs_size, dtype = np.float16)
     self.actions = np.empty(self.memory_size, dtype=np.int16)
-    self.returns = np.empty(self.memory_size, dtype = np.float16)
+    self.rewards = np.empty(self.memory_size, dtype = np.float16)
     self.terminal = np.empty(self.memory_size, dtype = np.bool_)
 
     self.count = 0
     self.current = 0
 
-  def add(self, obs, action, returns, terminal):
+  def add(self, obs, action, rewards, terminal):
     self.observations[self.current] = obs
     self.actions[self.current] = action
-    self.returns[self.current] = returns
+    self.rewards[self.current] = rewards
     self.terminal[self.current] = terminal
 
     self.count = max(self.count, self.current + 1)
@@ -304,7 +306,7 @@ class ReplayMemory:
 
   def sample(self, batch_size, seq_len=0):
     # sample random indexes
-    indexes = [] ; states = []
+    indexes = [] ; prestates = [] ; poststates = []
     watchdog = 0
     while len(indexes) < batch_size:
       while True:
@@ -312,15 +314,16 @@ class ReplayMemory:
         index = np.random.randint(1, self.count - 1)
         if seq_len is not 0:
           start = index-seq_len
-          if not self._uninterrupted(start, index):
+          if not self._uninterrupted(start, index+1):
             continue
         break
 
       indexes.append(index)
-      states.append(self._get_state(index, seq_len))
-
-    return states, self.actions[indexes], self.returns[indexes]
-
+      prestates.append(self._get_state(index, seq_len))
+      poststates.append(self._get_state(index+1, seq_len))
+      
+    indexes = np.array(indexes)
+    return prestates, self.actions[indexes], self.rewards[indexes], poststates, self.terminal[indexes+1]
 
 # Preprocessors:
 def default_preprocessor(state):

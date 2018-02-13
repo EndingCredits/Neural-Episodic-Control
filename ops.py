@@ -29,7 +29,7 @@ def conv2d(x,
 
   return out, w, b
 
-def linear(input_, output_size, stddev=0.02, bias_start=0.0, activation_fn=None, name='linear'):
+def linear(input_, output_size, stddev=0.1, bias_start=0.0, activation_fn=None, name='linear'):
   shape = input_.get_shape().as_list()
 
   with tf.variable_scope(name):
@@ -80,7 +80,37 @@ def invariant_layer(inputs, out_size, context=None, activation_fct='ReLU', name=
 
     # Returns elements, their invariant and  the weights
     return elements, params
+    
+    
+def relation_layer(out_size, state, mask, name=''):
+    in_size = state.get_shape()[2]
+    num_elems = tf.shape(state)[1]
+    
+    flat_shape = [-1, num_elems*num_elems, out_size]
+    mat_shape = [-1, num_elems, num_elems, out_size]
+    
+    combined, params_1 = invariant_layer(state, 2*out_size)
+    q, k = tf.split(combined, [out_size, out_size], axis=2)
+    
+    qk = tf.expand_dims(q, -3) + tf.expand_dims(k, -2)
+    #qk = tf.reshape(qk, flat_shape)
+    #qk = tf.reshape(qk, mat_shape)
+    
+    mask_ = tf.expand_dims(mask, -3) * tf.expand_dims(mask, -2)
+    qk_ = qk - (1-mask_)*10e9
+    
+    qk = tf.nn.softmax(qk_, dim=3)
 
+    out = tf.reduce_max(qk, 2)# / tf.reduce_sum(mask_, -2)
+    
+    return out, params_1
+
+
+def get_mask(x):
+    # Returns a matrix with values set to 1 where elements aren't padding
+    emb_sum = tf.reduce_sum(tf.abs(x), axis=-1, keep_dims=True)
+    return 1.0 - tf.to_float(tf.equal(emb_sum, 0.0))
+    
 
 def mask_and_pool(embeds, mask, pool_type='max'):
     # Use broadcasting to multiply
