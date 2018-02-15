@@ -78,8 +78,8 @@ def run_agent(args):
         args.history_len = 0
 
     # Create agent
-    #agent = NECAgent.NECAgent(sess, args)
-    agent = DQNAgent.DQNAgent(sess, args)
+    agent = NECAgent.NECAgent(sess, args)
+    #agent = DQNAgent.DQNAgent(sess, args)
 
     # Initialize all tensorflow variables
     sess.run(tf.global_variables_initializer())
