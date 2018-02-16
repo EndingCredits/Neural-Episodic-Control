@@ -96,13 +96,14 @@ class DQNAgent():
         # Loss Function
         self.target_q = tf.placeholder("float", [None])
         self.td_err = self.target_q - self.pred_q
-        total_loss = tf.reduce_sum(tf.square(self.td_err))
-        #total_loss = total_loss + become_skynet_penalty #commenting this out makes code run faster 
+        # Huber loss, from baselines
+        total_loss = tf.where(
+          tf.abs(self.td_err) < 1.0,
+          tf.square(self.td_err) * 0.5,
+          (tf.abs(self.td_err) - 0.5))
         
         # Optimiser
-        self.optim = tf.train.RMSPropOptimizer(
-          self.learning_rate, decay=0.9, epsilon=0.01).minimize(total_loss)
-          # These are the optimiser settings used by DeepMind
+        self.optim = tf.train.AdamOptimizer(self.learning_rate).minimize(total_loss)
 
 
     def _get_state(self, t=-1):
