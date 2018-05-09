@@ -15,8 +15,9 @@ python main.py -h
 There is currently only training, without any testing and saving or loading. Scores are reported per episode, which is once per life.
 
 N.B: There are a number of differences between this implementation and the original paper:
-* The DND returns exact nearest neighbours and hence is 1/10th of the size used in the paper.
-* New elements are checked against previous elements by looking to see if they are closer than a certain threshold. In the NEC paper apparently this is done instead by storing a hash of the game screen and checking for exact matches.
+* ~~New elements are checked against previous elements by looking to see if they are closer than a certain threshold. In the NEC paper apparently this is done instead by storing a hash of the game screen and checking for exact matches.~~
+  * UPDATE: Elements are now not checked against previous elements in the dict, i.e. existing elements are not overwritten.
+* Existing elements of the dict are not updated by backpropagation, only the embedding network is.
 * The way the environment handles new starts is slightly different.
 * Various hyperparams may be slightly different.
 
@@ -31,7 +32,7 @@ You'll have to look up how to install these, but this project uses the following
 * scikit-learn (can be commented out)
 * annoy
 * tensorflow >1.0
-* OpenCV2 (only used in the preprocessors, could be replaced with a different library)
+* ~~OpenCV2 (only used in the preprocessors, could be replaced with a different library)~~
 * OpenAI Gym (if using gym)
 * https://github.com/mgbellemare/Arcade-Learning-Environment (if using ALE, you'll also need to grab any roms you need.)
 * tqdm
@@ -62,7 +63,8 @@ Technical improvements:
 * <s>Merge history handling with saved trajectories and replay memory to save memory</s>
   * Done!
 * Replace saved trajectories (as list) with a trajectories class which also handles computing returns.
-* Add saving and loading capabilities to model+dictionary (this might include partially implementing the DND in tensorflow)
+* ~~Add saving and loading capabilities to model+dictionary (this might include partially implementing the DND in tensorflow)~~
+  * Done!
 
 Experiments:
 * Decay old elements in the dictionary to simulate alpha-updates
